@@ -40,7 +40,7 @@ export function route<P extends Record<string, string> = Record<string, string>>
   opts: Options,
   fn: (req: NextRequest, ctx: RouteContext<P>) => Promise<Response | unknown>,
 ) {
-  return async (req: NextRequest, segment: { params: Promise<P> }) => {
+  return async (req: NextRequest, segment: { params: Promise<unknown> }) => {
     try {
       const ip = clientIp(req.headers);
       if (MUTATING.has(req.method) && !opts.allowCrossOrigin && !isSameOrigin(req)) throw forbidden("Cross-site request rejected.");
@@ -51,7 +51,7 @@ export function route<P extends Record<string, string> = Record<string, string>>
           return NextResponse.json({ error: tooMany().message }, { status: 429, headers: { "Retry-After": String(r.retryAfter) } });
         }
       }
-      const params = (await segment?.params) ?? ({} as P);
+      const params = ((await segment?.params) ?? {}) as P;
       const result = await fn(req, { ip, params });
       if (result instanceof Response) return result;
       return NextResponse.json(result ?? { ok: true }, { headers: { "Cache-Control": "no-store" } });

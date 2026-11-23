@@ -100,3 +100,22 @@ describe("subtractRect", () => {
     expect(pieces.reduce((s, r) => s + r.w * r.d, 0)).toBeCloseTo(80 - 6);
   });
 });
+
+import { encodeConfig, decodeConfig } from "@/three/share";
+import { diffConfigs } from "@/three/config";
+describe("config sharing and diff", () => {
+  it("round-trips through the URL encoding", () => {
+    const c = mergeConfig(DEFAULT_CONFIG, { exterior: { wall: "brick" }, environment: { time: 9.25 } });
+    expect(decodeConfig(encodeConfig(c))).toEqual(c);
+  });
+  it("rejects tampered or invalid input", () => {
+    expect(decodeConfig("not-base64!!")).toBeNull();
+    expect(decodeConfig(btoa(JSON.stringify({ exterior: { wall: "<script>" } })))).toBeNull();
+  });
+  it("lists human-readable differences", () => {
+    const b = mergeConfig(DEFAULT_CONFIG, { exterior: { wall: "brick" }, environment: { pool: false } });
+    const d = diffConfigs(DEFAULT_CONFIG, b);
+    expect(d.map((x) => x.label)).toEqual(["Wall material", "Swimming pool"]);
+    expect(d[0]).toMatchObject({ a: "Travertine stone", b: "Fired brick" });
+  });
+});

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "overlay";
 type Size = "sm" | "md" | "lg";
 
 const base =
@@ -12,6 +12,7 @@ const variants: Record<Variant, string> = {
   secondary: "border border-line-strong bg-transparent text-ink hover:border-ink/60 hover:bg-ink/5",
   ghost: "text-ink hover:bg-ink/5",
   danger: "bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25",
+  overlay: "border border-line-strong bg-canvas/75 text-ink backdrop-blur-md hover:bg-canvas/95",
 };
 const sizes: Record<Size, string> = {
   sm: "h-9 px-3 text-sm",

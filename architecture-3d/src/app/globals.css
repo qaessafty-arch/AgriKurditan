@@ -24,6 +24,7 @@
     --line: rgba(255, 255, 255, 0.12);
     --line-strong: rgba(255, 255, 255, 0.22);
     --glass: rgba(16, 17, 20, 0.62);
+    --chart-mark: #B4823F; /* validated vs #202329 surface */
   }
 
   [data-theme="light"] {
@@ -42,6 +43,7 @@
     --line: rgba(22, 23, 27, 0.12);
     --line-strong: rgba(22, 23, 27, 0.24);
     --glass: rgba(245, 243, 239, 0.72);
+    --chart-mark: #9C6B2C; /* validated vs #ECE9E3 surface */
   }
 
   html {
@@ -140,4 +142,10 @@
   .text-pretty { text-wrap: pretty; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; color: #111 !important; }
+  .print-area { position: absolute; inset: 0; padding: 24px; }
 }
