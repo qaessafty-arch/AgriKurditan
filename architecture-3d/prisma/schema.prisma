@@ -1,0 +1,489 @@
+// Architecture 3D — data model.
+// Money is stored as Decimal(14,2) with an explicit ISO currency. Amounts on orders are snapshots,
+// so later price edits never rewrite history.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+enum Role {
+  ADMIN
+  ARCHITECT
+  CUSTOMER
+  PARTNER
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  passwordHash       String
+  name               String
+  phone              String?
+  company            String?
+  role               Role      @default(CUSTOMER)
+  emailVerifiedAt    DateTime?
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  disabled           Boolean   @default(false)
+  marketingOptIn     Boolean   @default(false)
+  bio                String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions        Session[]
+  resetTokens     PasswordResetToken[]
+  designs         Design[]
+  consultations   Consultation[]
+  quotes          QuoteRequest[]
+  orders          Order[]
+  subscriptions   Subscription[]
+  notifications   Notification[]
+  briefs          AiBrief[]
+  reviews         Review[]
+  uploads         Upload[]
+  projectsOwned   Project[]            @relation("ProjectOwner")
+  auditLogs       AuditLog[]           @relation("AuditActor")
+  paymentsVerified Payment[]           @relation("PaymentVerifier")
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent  String?
+  ip         String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ───────────────────────────── Catalogue ─────────────────────────────
+
+model Service {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  tagline      String
+  description  String
+  benefits     String[]
+  process      Json     // [{ title, detail }]
+  heroPreset   String   // building preset id used for the live 3D cover
+  sortOrder    Int      @default(0)
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  offerings     Offering[]
+  quotes        QuoteRequest[]
+  consultations Consultation[]
+  projects      Project[]
+}
+
+enum OfferingKind {
+  SERVICE_PACKAGE
+  VISUALIZATION_PACKAGE
+  PREMIUM_FEATURE
+  CONSULTATION
+  ARCHITECT_SUBSCRIPTION
+  PARTNERSHIP
+  FEATURED_PLACEMENT
+  CUSTOM_COMMISSION
+}
+
+enum BillingInterval {
+  ONE_TIME
+  MONTHLY
+  YEARLY
+}
+
+/// A priced, purchasable thing. Prices are managed in the admin dashboard, never in code.
+model Offering {
+  id            String          @id @default(cuid())
+  slug          String          @unique
+  kind          OfferingKind
+  name          String
+  summary       String
+  features      String[]
+  /// Null price means "quote on request": the offering cannot be checked out directly.
+  price         Decimal?        @db.Decimal(14, 2)
+  currency      String          @default("USD")
+  interval      BillingInterval @default(ONE_TIME)
+  /// Capability unlocked while an order/subscription for this offering is active, e.g. "studio_pro".
+  entitlement   String?
+  /// Who may buy it (empty = anyone signed in).
+  audience      Role[]
+  highlighted   Boolean         @default(false)
+  published     Boolean         @default(true)
+  sortOrder     Int             @default(0)
+  serviceId     String?
+  service       Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  orders        Order[]
+  subscriptions Subscription[]
+
+  @@index([kind, published])
+}
+
+enum ProjectStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  slug          String        @unique
+  title         String
+  summary       String
+  description   String
+  styles        String[]      // modern, minimalist, brutalist, classical, luxury
+  categories    String[]      // residential, commercial, interior, landscape
+  location      String?       // shown only when the client authorised it
+  showLocation  Boolean       @default(false)
+  year          Int?
+  areaM2        Int?
+  floors        Int?
+  /// Building configuration rendered by the 3D engine for the interactive preview.
+  config        Json
+  presetId      String
+  specs         Json          // [{ label, value }]
+  challenge     String?
+  solution      String?
+  outcome       String?
+  isConcept     Boolean       @default(true) // concept study vs. delivered client work
+  status        ProjectStatus @default(DRAFT)
+  featured      Boolean       @default(false)
+  featuredUntil DateTime?
+  viewCount     Int           @default(0)
+  ownerId       String?
+  owner         User?         @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  serviceId     String?
+  service       Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  coverUploadId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, featured])
+}
+
+// ───────────────────────────── Customer work ─────────────────────────────
+
+model Design {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  presetId    String
+  config      Json
+  thumbnailId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quotes        QuoteRequest[]
+  consultations Consultation[]
+
+  @@index([userId, updatedAt])
+}
+
+enum ConsultationStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model Consultation {
+  id            String             @id @default(cuid())
+  reference     String             @unique
+  userId        String?
+  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name          String
+  email         String
+  phone         String?
+  topic         String
+  message       String
+  preferredDate DateTime?
+  channel       String             @default("video") // video | phone | in_person
+  status        ConsultationStatus @default(REQUESTED)
+  scheduledAt   DateTime?
+  adminNotes    String?
+  serviceId     String?
+  service       Service?           @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  designId      String?
+  design        Design?            @relation(fields: [designId], references: [id], onDelete: SetNull)
+  briefId       String?
+  brief         AiBrief?           @relation(fields: [briefId], references: [id], onDelete: SetNull)
+  source        String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status, createdAt])
+}
+
+enum QuoteStatus {
+  DRAFT        // started but not submitted — counted as abandoned after 24h
+  SUBMITTED
+  IN_REVIEW
+  QUOTED
+  ACCEPTED
+  DECLINED
+}
+
+model QuoteRequest {
+  id           String      @id @default(cuid())
+  reference    String      @unique
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String?
+  email        String?
+  phone        String?
+  serviceId    String?
+  service      Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  designId     String?
+  design       Design?     @relation(fields: [designId], references: [id], onDelete: SetNull)
+  briefId      String?
+  brief        AiBrief?    @relation(fields: [briefId], references: [id], onDelete: SetNull)
+  details      String?
+  siteLocation String?
+  areaM2       Int?
+  budgetMin    Decimal?    @db.Decimal(14, 2)
+  budgetMax    Decimal?    @db.Decimal(14, 2)
+  currency     String      @default("USD")
+  timeline     String?
+  status       QuoteStatus @default(DRAFT)
+  quotedAmount Decimal?    @db.Decimal(14, 2)
+  quoteNotes   String?
+  submittedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+model AiBrief {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider    String   // "claude" | "rules"
+  model       String?
+  input       Json
+  output      Json
+  uploadIds   String[]
+  createdAt   DateTime @default(now())
+
+  consultations Consultation[]
+  quotes        QuoteRequest[]
+
+  @@index([createdAt])
+}
+
+// ───────────────────────────── Commerce ─────────────────────────────
+
+enum OrderStatus {
+  PENDING_PAYMENT        // created, waiting for the customer to pay
+  AWAITING_VERIFICATION  // customer submitted a transfer reference, staff must verify
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  reference   String      @unique
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  offeringId  String
+  offering    Offering    @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  // Snapshot at checkout time.
+  itemName    String
+  amount      Decimal     @db.Decimal(14, 2)
+  currency    String
+  interval    BillingInterval
+  status      OrderStatus @default(PENDING_PAYMENT)
+  method      String      // "bank_transfer" | "cash" | gateway id once integrated
+  notes       String?
+  paidAt      DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  payments     Payment[]
+  subscription Subscription?
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+enum PaymentStatus {
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  orderId      String
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method       String
+  amount       Decimal       @db.Decimal(14, 2)
+  currency     String
+  reference    String        // bank transfer reference / receipt number given by the customer
+  payerName    String?
+  proofUploadId String?
+  status       PaymentStatus @default(SUBMITTED)
+  verifiedById String?
+  verifiedBy   User?         @relation("PaymentVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt   DateTime?
+  rejectReason String?
+  createdAt    DateTime      @default(now())
+
+  @@index([status])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offeringId  String
+  offering    Offering           @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  orderId     String?            @unique
+  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  entitlement String?
+  status      SubscriptionStatus @default(ACTIVE)
+  startsAt    DateTime
+  endsAt      DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@index([userId, status])
+}
+
+// ───────────────────────────── Engagement ─────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  title     String
+  body      String
+  projectId String?
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([approved, createdAt])
+}
+
+model NewsletterSubscriber {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  tokenHash   String    @unique
+  confirmedAt DateTime?
+  unsubscribedAt DateTime?
+  source      String?
+  createdAt   DateTime  @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+/// Only recorded for visitors who accepted analytics cookies.
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  visitorId String
+  type      String   // page_view | project_view | cta_click | studio_open | assistant_open
+  path      String
+  subject   String?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([visitorId])
+}
+
+// ───────────────────────────── Platform ─────────────────────────────
+
+model Upload {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storageKey  String   @unique
+  mime        String
+  sizeBytes   Int
+  purpose     String   // land_photo | payment_proof | design_thumbnail | project_cover
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+/// Key/value settings editable by administrators (bank details, WhatsApp number, SEO defaults...).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  meta      Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+}

@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+.env
+.env.local
+storage/*
+!storage/.gitkeep
+coverage
+test-results
+tests/e2e/screenshots
+*.tsbuildinfo
+next-env.d.ts

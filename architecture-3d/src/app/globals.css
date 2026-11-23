@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens. Values are space-separated RGB so Tailwind can apply alpha.
+ * Contrast for every text/background pair is verified by scripts/contrast.mjs (WCAG AA ≥ 4.5:1).
+ */
+@layer base {
+  :root,
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --canvas: 16 17 20;          /* #101114 primary background */
+    --surface: 32 35 41;         /* #202329 secondary background */
+    --raised: 42 46 53;          /* #2A2E35 raised panels */
+    --ink: 245 243 239;          /* #F5F3EF primary text */
+    --muted: 166 166 162;        /* #A6A6A2 secondary text */
+    --stone: 216 214 208;        /* #D8D6D0 architectural stone */
+    --accent: 182 154 114;       /* #B69A72 bronze accent (fills) */
+    --accent-ink: 201 175 136;   /* #C9AF88 accent used as text */
+    --sage: 143 168 161;         /* environmental accent, text-safe */
+    --danger: 242 130 122;
+    --success: 123 197 155;
+    --line: rgba(255, 255, 255, 0.12);
+    --line-strong: rgba(255, 255, 255, 0.22);
+    --glass: rgba(16, 17, 20, 0.62);
+  }
+
+  [data-theme="light"] {
+    color-scheme: light;
+    --canvas: 245 243 239;       /* #F5F3EF */
+    --surface: 236 233 227;      /* #ECE9E3 */
+    --raised: 255 255 255;
+    --ink: 22 23 27;             /* #16171B */
+    --muted: 91 91 85;           /* #5B5B55 */
+    --stone: 120 117 110;
+    --accent: 182 154 114;
+    --accent-ink: 118 96 63;     /* #76603F */
+    --sage: 74 100 93;
+    --danger: 179 38 30;
+    --success: 42 101 69;
+    --line: rgba(22, 23, 27, 0.12);
+    --line-strong: rgba(22, 23, 27, 0.24);
+    --glass: rgba(245, 243, 239, 0.72);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3 {
+    @apply font-display;
+    font-weight: 500;
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.35);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-eyebrow uppercase text-accent-ink font-semibold;
+  }
+
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  }
+
+  .hairline {
+    border-color: var(--line);
+  }
+
+  .field {
+    @apply w-full rounded border bg-raised/60 px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/80
+      transition-colors duration-200 focus:border-accent focus:outline-none;
+    border-color: var(--line-strong);
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+
+  .field-hint {
+    @apply mt-1 text-xs text-muted;
+  }
+
+  .field-error {
+    @apply mt-1 text-xs text-danger;
+  }
+
+  .card {
+    @apply rounded-lg border bg-surface;
+    border-color: var(--line);
+  }
+
+  .table-base {
+    @apply w-full text-left text-sm;
+  }
+  .table-base th {
+    @apply border-b px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted;
+    border-color: var(--line);
+  }
+  .table-base td {
+    @apply border-b px-3 py-3 align-top;
+    border-color: var(--line);
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+}
