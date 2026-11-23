@@ -27,9 +27,13 @@ export function Building({ model, config, interactive = false, driven }: Buildin
   const planes = useClipPlanes();
   const lighting = useMemo(() => computeLighting(config.environment), [config.environment]);
 
+  // Rebuild materials only when finishes change or night level moves meaningfully, not every time step.
+  const nightLevel = Math.round(lighting.night * 10) / 10;
+  const materialKey = JSON.stringify([config.exterior, config.interior, config.environment.outdoorLights, nightLevel]);
   const materials = useMemo(
-    () => createMaterials(config, { textureSize: TEXTURE_SIZE[quality], clippingPlanes: planes, night: lighting.night }),
-    [config, quality, planes, lighting.night],
+    () => createMaterials(config, { textureSize: TEXTURE_SIZE[quality], clippingPlanes: planes, night: nightLevel }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [materialKey, quality, planes],
   );
   useEffect(() => () => disposeMaterials(materials), [materials]);
 

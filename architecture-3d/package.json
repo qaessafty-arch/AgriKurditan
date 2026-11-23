@@ -55,6 +55,8 @@
     "vitest": "3.2.7"
   },
   "overrides": {
-    "postcss": "8.5.33"
+    "postcss": "8.5.33",
+    "motion-dom": "12.23.21",
+    "motion-utils": "12.23.6"
   }
 }

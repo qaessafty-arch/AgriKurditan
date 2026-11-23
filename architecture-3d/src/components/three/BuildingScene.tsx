@@ -8,8 +8,17 @@ import { Building, type BuildingProps } from "./Building";
 import { Site } from "./Site";
 import { Atmosphere, Effects } from "./Atmosphere";
 
+/** Geometry only depends on some fields; time of day, colours and finishes never rebuild it. */
+export function geometryKey(c: BuildingConfig): string {
+  const e = c.exterior;
+  return [e.windows, e.pattern, e.roof, e.balconies, e.door, e.accent === "same", c.interior.furniture,
+    c.environment.pool, c.environment.garden, c.environment.outdoorLights].join("|");
+}
+
 export function useBuildingModel(planId: string, config: BuildingConfig): BuildingModel {
-  return useMemo(() => generateBuilding(getPlan(planId), config), [planId, config]);
+  const key = geometryKey(config);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => generateBuilding(getPlan(planId), config), [planId, key]);
 }
 
 /** Building + site + sky + post-processing. Camera is supplied by the caller. */

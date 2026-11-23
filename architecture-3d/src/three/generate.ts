@@ -439,7 +439,12 @@ export function generateBuilding(plan: BuildingPlan, config: BuildingConfig): Bu
           case "right": box(parts, s, f, rect.x + rect.w - thick - inset, y0, rect.z + EXT_T + a0, rect.x + rect.w - inset, y1, rect.z + EXT_T + a1); break;
         }
       };
-      wallWithOpenings(len, 0, H, openings, (a0, a1, y0, y1) => emit(a0, a1, y0, y1));
+      // Outer leaf in the facade material, inner lining in the interior wall finish.
+      const LINING = 0.04;
+      wallWithOpenings(len, 0, H, openings, (a0, a1, y0, y1) => {
+        emit(a0, a1, y0, y1, slot, 0, EXT_T - LINING);
+        if (y1 > FIN_Y) emit(a0, a1, Math.max(y0, FIN_Y), y1, "intWall", EXT_T - LINING, LINING);
+      });
 
       for (const o of openings) {
         const oy0 = FIN_Y + o.bottom, oy1 = FIN_Y + o.top;
