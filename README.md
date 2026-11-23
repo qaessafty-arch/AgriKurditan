@@ -23,3 +23,9 @@ A highly secure, direct-to-market agricultural wholesale exchange platform built
 2. Go to the repository **Settings** > **Pages**.
 3. Select the `main` branch as the source and click Save.
 4. Your `index.html` dashboard will be live for everyone to see!
+
+---
+
+## Architecture 3D (separate application)
+
+The `architecture-3d/` folder contains a separate product: an immersive architectural visualization and commercial platform (Next.js, React Three Fiber, PostgreSQL). It shares no code with AgriKurdistan. See [`architecture-3d/README.md`](architecture-3d/README.md).

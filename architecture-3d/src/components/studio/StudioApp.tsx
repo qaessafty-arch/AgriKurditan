@@ -1,0 +1,462 @@
+"use client";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SceneCanvas } from "@/components/three/SceneCanvas";
+import { BuildingScene, useBuildingModel } from "@/components/three/BuildingScene";
+import { ExplorerCamera, MeasureOverlay } from "@/components/three/ExplorerCamera";
+import { ElevationDrawing } from "@/components/three/ElevationDrawing";
+import { PresetBar, ViewControls } from "@/components/explorer/ViewTools";
+import { Inspector } from "@/components/explorer/Inspector";
+import { EnvironmentPanel, ExteriorPanel, InteriorPanel } from "./OptionPanels";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
+import { IconButton } from "@/components/ui/Controls";
+import { useDesign } from "@/store/design";
+import { useViewer } from "@/store/viewer";
+import { PLANS, getPlan } from "@/three/plans";
+import { coerceConfig, describeConfig, diffConfigs, type BuildingConfig } from "@/three/config";
+import { generateBuilding, summarizeModel, type BuildingStats } from "@/three/generate";
+import { decodeConfig, encodeConfig } from "@/three/share";
+import { api } from "@/lib/client-api";
+import { cn } from "@/lib/cn";
+import { track } from "@/components/layout/ConsentBanner";
+
+type Tab = "exterior" | "interior" | "environment" | "view" | "inspect";
+interface SavedDesign { id: string; name: string; presetId: string; config: unknown; thumbnail: string | null; updatedAt: string }
+interface Snapshot { id: string; name: string; presetId: string; config: BuildingConfig; thumbnail: string }
+
+const DRAFT_KEY = "a3d-studio-draft";
+
+async function thumbnailFrom(dataUrl: string, width = 640): Promise<string> {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = Math.round((img.height / img.width) * width);
+  canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+function download(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro: boolean; freeLimit: number }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const { planId, config, past, future, dirty, undo, redo, load, setPlan, restoreDefaults, markSaved } = useDesign();
+  const plan = getPlan(planId);
+  const model = useBuildingModel(planId, config);
+  const [tab, setTab] = useState<Tab>("exterior");
+  const [designId, setDesignId] = useState<string | null>(null);
+  const [designName, setDesignName] = useState("");
+  const [dialog, setDialog] = useState<null | "save" | "compare" | "summary" | "export">(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<SavedDesign[]>([]);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [compareTarget, setCompareTarget] = useState<Snapshot | null>(null);
+  const [currentThumb, setCurrentThumb] = useState<string | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const initialised = useRef(false);
+
+  // ── Initial load: saved design, shared config, draft, or plan defaults ──
+  useEffect(() => {
+    if (initialised.current) return;
+    initialised.current = true;
+    useViewer.getState().reset();
+    const id = params.get("design");
+    const shared = decodeConfig(params.get("config"));
+    const plan = getPlan(params.get("plan"));
+    track("studio_open", plan.id);
+    if (id) {
+      void api<{ design: SavedDesign }>(`/api/designs/${id}`).then((r) => {
+        if (r.ok) {
+          load(r.data.design.presetId, coerceConfig(r.data.design.config));
+          setDesignId(r.data.design.id);
+          setDesignName(r.data.design.name);
+        } else {
+          setNotice({ kind: "error", text: r.status === 401 ? "Sign in to open your saved design." : r.error });
+          load(plan.id, plan.defaultConfig);
+        }
+      });
+      return;
+    }
+    if (shared) return load(plan.id, shared);
+    if (params.get("plan")) return load(plan.id, plan.defaultConfig);
+    try {
+      const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as { planId: string; config: unknown } | null;
+      if (draft) return load(getPlan(draft.planId).id, coerceConfig(draft.config));
+    } catch { /* no draft */ }
+    load(plan.id, plan.defaultConfig);
+  }, [params, load]);
+
+  // Keep a local draft so work survives a refresh even without an account.
+  useEffect(() => {
+    if (!initialised.current) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ planId, config })); } catch { /* storage unavailable */ }
+  }, [planId, config]);
+
+  // Keyboard shortcuts: undo / redo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("input, textarea, select, [contenteditable]")) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
+  // Warn before leaving with unsaved changes to a saved design.
+  useEffect(() => {
+    const onUnload = (e: BeforeUnloadEvent) => { if (dirty && designId) e.preventDefault(); };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [dirty, designId]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  useEffect(() => useViewer.subscribe((s, prev) => {
+    if (s.inspected !== prev.inspected && s.inspected) setTab("inspect");
+  }), []);
+
+  const capture = useCallback(async (scale = 1) => useViewer.getState().requestScreenshot(scale), []);
+
+  const loadSaved = useCallback(async () => {
+    if (!signedIn) return;
+    const r = await api<{ designs: SavedDesign[] }>("/api/designs");
+    if (r.ok) setSaved(r.data.designs);
+  }, [signedIn]);
+
+  // ── Actions ──
+  const save = async (asNew: boolean) => {
+    if (!designName.trim()) return setNotice({ kind: "error", text: "Give the design a name." });
+    setBusy(true);
+    const thumbnail = await thumbnailFrom(await capture(1));
+    const body = { name: designName.trim(), presetId: planId, config, thumbnail };
+    const r = designId && !asNew
+      ? await api<{ design: { id: string } }>(`/api/designs/${designId}`, { method: "PATCH", body })
+      : await api<{ design: { id: string } }>("/api/designs", { body });
+    setBusy(false);
+    if (!r.ok) return setNotice({ kind: "error", text: r.error });
+    setDesignId(r.data.design.id);
+    markSaved();
+    setDialog(null);
+    setNotice({ kind: "ok", text: `Saved “${designName.trim()}”.` });
+    router.replace(`/studio?design=${r.data.design.id}`, { scroll: false });
+  };
+
+  const takeSnapshot = async () => {
+    const thumbnail = await thumbnailFrom(await capture(1), 480);
+    const n = snapshots.length + 1;
+    setSnapshots((s) => [...s, { id: `snap-${Date.now()}`, name: `Snapshot ${n}`, presetId: planId, config: structuredClone(config), thumbnail }].slice(-6));
+    setNotice({ kind: "ok", text: `Snapshot ${n} taken. Open Compare to view it beside the current design.` });
+  };
+
+  const openCompare = async () => {
+    setCurrentThumb(await thumbnailFrom(await capture(1), 640));
+    void loadSaved();
+    setDialog("compare");
+  };
+
+  const exportImage = async (scale: number) => {
+    setBusy(true);
+    const url = await capture(scale);
+    setBusy(false);
+    download(url, `${plan.name.replace(/\s+/g, "-").toLowerCase()}-${scale > 1 ? "4k" : "hd"}.png`);
+    setDialog(null);
+  };
+
+  const summaryText = useMemo(() => {
+    const lines = [`${plan.name} — design summary`, "", ...summarizeModel(model).map((l) => `• ${l}`), ""];
+    for (const s of describeConfig(config)) {
+      lines.push(s.section.toUpperCase());
+      for (const r of s.rows) lines.push(`  ${r.label}: ${r.value}`);
+      lines.push("");
+    }
+    lines.push("Preliminary design study. Not a construction document; structural and code compliance require review by licensed professionals.");
+    return lines.join("\n");
+  }, [plan, model, config]);
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "exterior", label: "Exterior" },
+    { id: "interior", label: "Interior" },
+    { id: "environment", label: "Environment" },
+    { id: "view", label: "View" },
+    { id: "inspect", label: "Inspect" },
+  ];
+
+  const actions = (
+    <>
+            <Button size="sm" variant="overlay" onClick={takeSnapshot}>Snapshot</Button>
+            <Button size="sm" variant="overlay" onClick={openCompare}>Compare</Button>
+            <Button size="sm" variant="overlay" onClick={() => setDialog("export")}>Export image</Button>
+            <Button size="sm" variant="overlay" onClick={() => setDialog("summary")}>Summary</Button>
+            <Button size="sm" onClick={() => { if (!designName) setDesignName(`${plan.name} variation`); setDialog("save"); }}>
+              {designId ? (dirty ? "Save changes" : "Saved") : "Save design"}
+            </Button>
+          </>
+  );
+
+  return (
+    <div className="lg:grid lg:h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div ref={stageRef} className="relative h-[58dvh] min-h-[340px] bg-canvas lg:h-full">
+        <SceneCanvas
+          className="absolute inset-0"
+          preserveDrawingBuffer
+          label={`Customisable 3D model of ${plan.name}`}
+          onPointerMissed={() => useViewer.getState().set({ inspected: null, selectedRoom: null })}
+          fallback={
+            <div className="absolute inset-0 grid place-items-center bg-surface p-6 text-center">
+              <div className="w-full max-w-2xl">
+                <ElevationDrawing model={model} className="mx-auto h-56 w-full text-stone" />
+                <p className="mt-4 text-sm text-muted">3D graphics (WebGL) are unavailable in this browser. You can still change options and request a quote; the elevation updates as you go.</p>
+              </div>
+            </div>
+          }
+        >
+          <BuildingScene model={model} config={config} interactive>
+            <MeasureOverlay />
+          </BuildingScene>
+          <ExplorerCamera model={model} />
+        </SceneCanvas>
+
+        {/* Toolbar */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-3 sm:p-4">
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+            <label className="glass flex items-center gap-2 rounded-lg border hairline px-3 py-2 text-sm">
+              <span className="sr-only sm:not-sr-only text-muted">Building</span>
+              <select className="bg-transparent font-medium text-ink outline-none" value={planId} onChange={(e) => setPlan(e.target.value)} aria-label="Building type">
+                {PLANS.map((p) => <option key={p.id} value={p.id} className="bg-canvas">{p.name}</option>)}
+              </select>
+            </label>
+            <div className="glass flex gap-1 rounded-lg border hairline p-1" role="toolbar" aria-label="History">
+              <IconButton label="Undo (Ctrl+Z)" onClick={undo} disabled={past.length === 0}>
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M7 4L3 8l4 4M3 8h8a4 4 0 010 8H8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+              </IconButton>
+              <IconButton label="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={future.length === 0}>
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M11 4l4 4-4 4M15 8H7a4 4 0 000 8h3" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+              </IconButton>
+              <IconButton label="Restore defaults" onClick={restoreDefaults}>
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M3 9a6 6 0 106-6H6M6 1v4h4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+              </IconButton>
+            </div>
+          </div>
+          <div className="pointer-events-auto hidden flex-wrap gap-2 md:flex">
+            {actions}
+          </div>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 flex justify-center p-3 sm:p-4">
+          <PresetBar className="max-w-full" />
+        </div>
+        {notice && (
+          <div role="status" className={cn("absolute left-1/2 top-20 z-10 -translate-x-1/2 rounded-lg border px-4 py-2.5 text-sm shadow-panel", notice.kind === "ok" ? "border-success/40 bg-raised text-ink" : "border-danger/40 bg-raised text-danger")}>
+            {notice.text}
+          </div>
+        )}
+      </div>
+
+      <div className="no-scrollbar flex gap-2 overflow-x-auto border-b hairline bg-surface px-3 py-2 md:hidden" role="toolbar" aria-label="Design actions">{actions}</div>
+
+      <aside className="flex flex-col border-l hairline bg-surface/60 lg:overflow-hidden" aria-label="Design options">
+        <div role="tablist" aria-label="Option groups" className="no-scrollbar flex shrink-0 overflow-x-auto border-b hairline bg-surface">
+          {tabs.map((t) => (
+            <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              className={cn("shrink-0 flex-1 px-3 py-3 text-sm font-medium transition-colors", tab === t.id ? "border-b-2 border-accent text-ink" : "text-muted hover:text-ink")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 space-y-6 overflow-y-auto p-5">
+          {designId && <p className="text-xs text-muted">Editing <span className="text-ink">{designName}</span>{dirty ? " — unsaved changes" : ""}</p>}
+          {tab === "exterior" && <ExteriorPanel />}
+          {tab === "interior" && <InteriorPanel />}
+          {tab === "environment" && <EnvironmentPanel hasPool={Boolean(plan.pool)} />}
+          {tab === "view" && <ViewControls model={model} fullscreenTarget={stageRef} />}
+          {tab === "inspect" && <Inspector model={model} config={config} />}
+        </div>
+        <div className="shrink-0 border-t hairline p-4">
+          <ButtonLink
+            href={designId && !dirty ? `/quote?design=${designId}` : "#"}
+            className="w-full"
+            onClick={(e) => {
+              if (designId && !dirty) return;
+              e.preventDefault();
+              setNotice({ kind: "error", text: signedIn ? "Save the design first so we can attach it to your quote request." : "Sign in and save the design to attach it to a quote request." });
+              if (signedIn) { if (!designName) setDesignName(`${plan.name} variation`); setDialog("save"); }
+            }}
+          >
+            Request a quote for this design
+          </ButtonLink>
+        </div>
+      </aside>
+
+      {/* Save */}
+      <Dialog open={dialog === "save"} onClose={() => setDialog(null)} title={designId ? "Save design" : "Save to your account"}
+        footer={signedIn ? (
+          <>
+            {designId && <Button variant="secondary" onClick={() => save(true)} loading={busy}>Save as new</Button>}
+            <Button onClick={() => save(false)} loading={busy}>{designId ? "Save changes" : "Save"}</Button>
+          </>
+        ) : undefined}>
+        {signedIn ? (
+          <div className="space-y-3">
+            <label className="field-label" htmlFor="design-name">Design name</label>
+            <input id="design-name" className="field" maxLength={80} value={designName} onChange={(e) => setDesignName(e.target.value)} autoFocus />
+            {!pro && <p className="field-hint">Your plan includes {freeLimit} saved designs. <Link className="text-accent-ink hover:underline" href="/pricing#studio-pro">Studio Pro</Link> removes the limit.</p>}
+          </div>
+        ) : (
+          <div className="space-y-4 text-sm text-muted">
+            <p>Create a free account to save designs, compare versions and attach a design to a quote request. Your current work is kept as a draft in this browser.</p>
+            <div className="flex gap-2">
+              <ButtonLink href={`/login?next=${encodeURIComponent(`/studio?plan=${planId}&config=${encodeConfig(config)}`)}`}>Sign in</ButtonLink>
+              <ButtonLink variant="secondary" href={`/register?next=${encodeURIComponent(`/studio?plan=${planId}&config=${encodeConfig(config)}`)}`}>Create account</ButtonLink>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      {/* Compare */}
+      <Dialog open={dialog === "compare"} onClose={() => { setDialog(null); setCompareTarget(null); }} title="Compare designs" wide>
+        <CompareView
+          current={{ planId, config, thumbnail: currentThumb }}
+          target={compareTarget}
+          candidates={[...snapshots, ...saved.map((d) => ({ id: d.id, name: d.name, presetId: d.presetId, config: coerceConfig(d.config), thumbnail: d.thumbnail ?? "" }))]}
+          onPick={setCompareTarget}
+          onRestore={(s) => { load(s.presetId, s.config, { keepHistory: true }); setDialog(null); setCompareTarget(null); }}
+          signedIn={signedIn}
+        />
+      </Dialog>
+
+      {/* Export */}
+      <Dialog open={dialog === "export"} onClose={() => setDialog(null)} title="Export image">
+        <div className="space-y-3">
+          <p className="text-sm text-muted">Exports the current camera view as a PNG, including lighting and effects.</p>
+          <Button className="w-full" variant="secondary" loading={busy} onClick={() => exportImage(1)}>Screen resolution</Button>
+          <Button className="w-full" variant="secondary" loading={busy} disabled={!pro} onClick={() => exportImage(2.5)}>High resolution (up to 4K){pro ? "" : " · Studio Pro"}</Button>
+          {!pro && <p className="text-xs text-muted">High-resolution export is part of <Link href="/pricing#studio-pro" className="text-accent-ink hover:underline">Studio Pro</Link>.</p>}
+        </div>
+      </Dialog>
+
+      {/* Summary */}
+      <Dialog open={dialog === "summary"} onClose={() => setDialog(null)} title="Project summary" wide
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { void navigator.clipboard?.writeText(summaryText); setNotice({ kind: "ok", text: "Summary copied." }); }}>Copy text</Button>
+            <Button variant="secondary" onClick={() => download(URL.createObjectURL(new Blob([summaryText], { type: "text/plain" })), `${plan.id}-summary.txt`)}>Download .txt</Button>
+            <Button onClick={() => window.print()}>Print / PDF</Button>
+          </>
+        }>
+        <SummaryBody planName={plan.name} description={plan.description} stats={model.stats} lines={summarizeModel(model)} config={config} />
+      </Dialog>
+    </div>
+  );
+}
+
+function SummaryBody({ planName, description, stats, lines, config }: { planName: string; description: string; stats: BuildingStats; lines: string[]; config: BuildingConfig }) {
+  return (
+    <div className="print-area space-y-6">
+      <div>
+        <p className="eyebrow">Design summary</p>
+        <h3 className="mt-1 font-display text-3xl">{planName}</h3>
+        <p className="mt-1 text-sm text-muted">{description}</p>
+      </div>
+      <ul className="grid gap-2 text-sm sm:grid-cols-2">
+        {lines.map((l) => <li key={l} className="rounded border hairline px-3 py-2">{l}</li>)}
+      </ul>
+      <div className="grid gap-6 sm:grid-cols-3">
+        {describeConfig(config).map((s) => (
+          <div key={s.section}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">{s.section}</p>
+            <dl className="mt-2 space-y-1.5 text-sm">
+              {s.rows.map((r) => (
+                <div key={r.label} className="flex justify-between gap-3"><dt className="text-muted">{r.label}</dt><dd className="text-right">{r.value}</dd></div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+      <p className="rounded border hairline bg-surface p-3 text-xs text-muted">
+        Preliminary design study generated from the interactive model ({stats.grossFloorArea} m² gross). It is not a construction document. Structural safety, building-code and permit compliance require drawings prepared and verified by licensed professionals.
+      </p>
+    </div>
+  );
+}
+
+function CompareView({ current, target, candidates, onPick, onRestore, signedIn }: {
+  current: { planId: string; config: BuildingConfig; thumbnail: string | null };
+  target: Snapshot | null;
+  candidates: Snapshot[];
+  onPick: (s: Snapshot) => void;
+  onRestore: (s: Snapshot) => void;
+  signedIn: boolean;
+}) {
+  if (!target) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted">Choose a snapshot or saved design to compare with what is on screen.</p>
+        {candidates.length === 0 && (
+          <p className="rounded border hairline p-4 text-sm text-muted">
+            Nothing to compare yet. Use <span className="text-ink">Snapshot</span> to capture versions as you work{signedIn ? ", or save designs to your account." : "."}
+          </p>
+        )}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {candidates.map((c) => (
+            <button key={c.id} type="button" onClick={() => onPick(c)} className="group overflow-hidden rounded-lg border hairline text-left hover:border-accent">
+              {c.thumbnail ? <img src={c.thumbnail} alt="" className="aspect-[16/10] w-full object-cover" /> : <div className="aspect-[16/10] bg-surface" />}
+              <p className="px-3 py-2 text-sm text-ink">{c.name}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  const a = generateBuilding(getPlan(target.presetId), target.config).stats;
+  const b = generateBuilding(getPlan(current.planId), current.config).stats;
+  const diffs = target.presetId === current.planId ? diffConfigs(target.config, current.config) : [];
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[{ label: target.name, src: target.thumbnail }, { label: "Current design", src: current.thumbnail }].map((x) => (
+          <figure key={x.label}>
+            {x.src ? <img src={x.src} alt={x.label} className="aspect-[16/10] w-full rounded-lg border hairline object-cover" /> : <div className="aspect-[16/10] rounded-lg bg-surface" />}
+            <figcaption className="mt-2 text-sm font-medium">{x.label}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <table className="table-base">
+        <thead><tr><th>Measure</th><th>{target.name}</th><th>Current</th></tr></thead>
+        <tbody>
+          {target.presetId !== current.planId && <tr><td>Building</td><td>{getPlan(target.presetId).name}</td><td>{getPlan(current.planId).name}</td></tr>}
+          <tr><td>Glazing area</td><td>{a.glazingArea} m²</td><td>{b.glazingArea} m²</td></tr>
+          <tr><td>Glazing ratio</td><td>{Math.round(a.glazingRatio * 100)}%</td><td>{Math.round(b.glazingRatio * 100)}%</td></tr>
+          <tr><td>Height</td><td>{a.height} m</td><td>{b.height} m</td></tr>
+          {diffs.map((d) => <tr key={d.path}><td>{d.label}</td><td>{d.a}</td><td>{d.b}</td></tr>)}
+          {diffs.length === 0 && target.presetId === current.planId && <tr><td colSpan={3} className="text-muted">The configurations are identical.</td></tr>}
+        </tbody>
+      </table>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => onRestore(target)}>Load {target.name} into the studio</Button>
+      </div>
+    </div>
+  );
+}
