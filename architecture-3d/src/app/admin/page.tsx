@@ -32,7 +32,7 @@ export default async function AdminOverview() {
             <StatTile label="Project inquiries" value={String(m.inquiries30)} note="Consultations and quotes, 30 days" />
             <StatTile label="Abandoned quotes" value={String(m.abandonedQuotes)} note="Started but not sent within 24 h" />
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 xl:grid-cols-2">
             <BarChart title={`Verified revenue by month (${currency})`} data={m.revenueByMonth} format={(v) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : String(Math.round(v)))} />
             <BarChart title="Project inquiries per week" data={m.leadsByWeek} format={(v) => String(Math.round(v))} />
             <BarChart title="New customer accounts per week" data={m.customersByWeek} format={(v) => String(Math.round(v))} />
