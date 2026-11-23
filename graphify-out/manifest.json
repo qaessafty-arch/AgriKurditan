@@ -1,0 +1,26 @@
+{
+  "backend.py": {
+    "mtime": 1795457138.148808,
+    "seen": 1795457301.6396282,
+    "ast_hash": "3807e0b4a5675b1555b0861ec4931274",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1795457138.148808,
+    "seen": 1795457301.6396372,
+    "ast_hash": "8fc4aa00a063adf14b54d595241a51ff",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1795457138.148808,
+    "seen": 1795457301.639641,
+    "ast_hash": "f6257eb46e9067edb009a60612aece45",
+    "semantic_hash": ""
+  },
+  "requirements.txt": {
+    "mtime": 1795457138.148808,
+    "seen": 1795457301.6396432,
+    "ast_hash": "4c999c54b33cd45eeab682f848d37f6c",
+    "semantic_hash": ""
+  }
+}
