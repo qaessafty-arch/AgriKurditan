@@ -31,7 +31,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   await db.project.update({ where: { id: p.id }, data: { viewCount: { increment: 1 } } });
 
   const cover = coverFor(p.slug);
-  const gallery = ["interior", "aerial", "night"].map((v) => `/renders/${p.slug}-${v}.jpg`).filter((rel) => existsSync(path.join(process.cwd(), "public", rel)));
+  const gallery = ["interior", "garden", "night"].map((v) => `/renders/${p.slug}-${v}.jpg`).filter((rel) => existsSync(path.join(process.cwd(), "public", rel)));
   const specs = (p.specs as { label: string; value: string }[]) ?? [];
   const related = await db.project.findMany({
     where: { status: "PUBLISHED", id: { not: p.id }, OR: [{ styles: { hasSome: p.styles } }, { categories: { hasSome: p.categories } }] },

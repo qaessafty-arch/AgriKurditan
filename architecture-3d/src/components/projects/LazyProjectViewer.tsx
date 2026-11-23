@@ -16,9 +16,8 @@ export function LazyProjectViewer(props: { presetId: string; config: unknown; ti
     return () => io.disconnect();
   }, []);
   return (
-    <div ref={ref} className="relative aspect-[16/9] min-h-[320px] overflow-hidden rounded-xl border hairline bg-surface">
+    <div ref={ref} className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border hairline bg-surface sm:aspect-[16/9]">
       {active ? <Viewer {...props} /> : props.poster ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={props.poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : null}
       {!active && (

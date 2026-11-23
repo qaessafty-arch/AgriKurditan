@@ -266,9 +266,9 @@ const painters: Record<string, { meters: number; paint: Painter }> = {
   gravel: {
     meters: 3,
     paint: (ctx, s, rand) => {
-      ctx.fillStyle = "#b9ad97"; ctx.fillRect(0, 0, s, s);
+      ctx.fillStyle = "#a39781"; ctx.fillRect(0, 0, s, s);
       for (let i = 0; i < 2600; i++) {
-        ctx.fillStyle = shade("#b0a38b", (rand() - 0.5) * 0.3);
+        ctx.fillStyle = shade("#9d907a", (rand() - 0.5) * 0.3);
         ctx.beginPath();
         ctx.ellipse(rand() * s, rand() * s, rand() * 3 + 1, rand() * 2.4 + 0.8, rand() * 3, 0, Math.PI * 2);
         ctx.fill();
@@ -278,7 +278,7 @@ const painters: Record<string, { meters: number; paint: Painter }> = {
   meadow: {
     meters: 5,
     paint: (ctx, s, rand) => {
-      ctx.fillStyle = "#9c955f"; ctx.fillRect(0, 0, s, s);
+      ctx.fillStyle = "#8a8553"; ctx.fillRect(0, 0, s, s);
       blotches(ctx, s, rand, "#7a7a45", 400, 0.4, 16);
       blotches(ctx, s, rand, "#c2b37b", 300, 0.35, 12);
       grain(ctx, s, rand, 0.14, s * s);

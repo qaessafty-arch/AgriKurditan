@@ -1,5 +1,6 @@
 "use client";
 import { CameraControls, Html, Line } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import type { BuildingModel } from "@/three/generate";
 import { useViewer, type CameraPreset } from "@/store/viewer";
@@ -7,7 +8,16 @@ import { useViewer, type CameraPreset } from "@/store/viewer";
 export type Pose = { position: [number, number, number]; target: [number, number, number] };
 
 /** Camera presets derived from the building's real dimensions. */
-export function presetPose(model: BuildingModel, preset: CameraPreset): Pose {
+export function presetPose(model: BuildingModel, preset: CameraPreset, aspect = 1.6): Pose {
+  const pose = basePose(model, preset);
+  if (preset === "interior" || aspect >= 1) return pose;
+  // Portrait screens: pull back along the view direction so the building still fits.
+  const k = Math.pow(1 / aspect, 0.75);
+  const [px, py, pz] = pose.position, [tx, ty, tz] = pose.target;
+  return { position: [tx + (px - tx) * k, ty + (py - ty) * k, tz + (pz - tz) * k], target: pose.target };
+}
+
+function basePose(model: BuildingModel, preset: CameraPreset): Pose {
   const [w, h, d] = model.size;
   const R = Math.max(w, d, h * 1.5, 10);
   switch (preset) {
@@ -21,7 +31,7 @@ export function presetPose(model: BuildingModel, preset: CameraPreset): Pose {
         model.rooms.find((r) => r.floor === 0 && (r.type === "living" || r.type === "lobby" || r.type === "openOffice")) ??
         model.rooms.find((r) => r.floor === 0) ??
         model.rooms[0];
-      if (!living) return presetPose(model, "front");
+      if (!living) return basePose(model, "front");
       const cx = living.rect.x + living.rect.w / 2 - model.center[0];
       const back = living.rect.z + 0.9 - model.center[1];
       const front = living.rect.z + living.rect.d - model.center[1];
@@ -37,19 +47,22 @@ export function ExplorerCamera({ model, initial = "hero" }: { model: BuildingMod
   const ref = useRef<CameraControls>(null);
   const request = useViewer((s) => s.cameraRequest);
   const R = Math.max(model.size[0], model.size[2], 10);
+  const size = useThree((s) => s.size);
+  const aspect = size.width / Math.max(1, size.height);
 
   useEffect(() => {
-    const pose = presetPose(model, initial);
+    const pose = presetPose(model, initial, aspect);
     ref.current?.setLookAt(...pose.position, ...pose.target, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.planId]);
 
   useEffect(() => {
     if (!request || !ref.current) return;
-    const pose = presetPose(model, request.preset);
+    const pose = presetPose(model, request.preset, aspect);
     const c = ref.current;
     c.maxPolarAngle = request.preset === "plan" ? Math.PI * 0.49 : Math.PI * 0.495;
     void c.setLookAt(...pose.position, ...pose.target, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request, model]);
 
   return (

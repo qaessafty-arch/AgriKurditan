@@ -56,9 +56,9 @@ export function ExplorerApp() {
           <ExplorerCamera model={model} />
         </SceneCanvas>
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-3 sm:gap-3 sm:p-4">
           <label className="pointer-events-auto glass flex items-center gap-2 rounded-lg border hairline px-3 py-2 text-sm">
-            <span className="text-muted">Building</span>
+            <span className="hidden text-muted sm:inline">Building</span>
             <select
               className="bg-transparent font-medium text-ink outline-none"
               value={planId}
@@ -67,7 +67,7 @@ export function ExplorerApp() {
               {PLANS.map((p) => <option key={p.id} value={p.id} className="bg-canvas">{p.name}</option>)}
             </select>
           </label>
-          <ButtonLink href={`/studio?plan=${planId}`} size="sm" className="pointer-events-auto">Customise this design</ButtonLink>
+          <ButtonLink href={`/studio?plan=${planId}`} size="sm" className="pointer-events-auto"><span className="sm:hidden">Customise</span><span className="hidden sm:inline">Customise this design</span></ButtonLink>
         </div>
         <div className="absolute inset-x-0 bottom-0 flex justify-center p-3 sm:p-4">
           <PresetBar className="max-w-full" />

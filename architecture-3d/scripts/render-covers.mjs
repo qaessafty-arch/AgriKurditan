@@ -2,7 +2,7 @@
 // Usage: (dev or prod server running on BASE_URL) node scripts/render-covers.mjs [slug ...]
 // Output: public/renders/<slug>.jpg (cover), <slug>-interior.jpg, <slug>-aerial.jpg, <slug>-night.jpg
 import { createRequire } from "node:module";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 
 const require = createRequire(import.meta.url);
@@ -17,14 +17,15 @@ await db.$disconnect();
 await mkdir("public/renders", { recursive: true });
 
 const browser = await playwright.chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
-const views = [["hero", ""], ["interior", "-interior"], ["aerial", "-aerial"], ["night", "-night"]];
+const views = [["hero", ""], ["interior", "-interior"], ["rear", "-garden"], ["night", "-night"]];
 for (const { slug } of projects) {
   for (const [view, suffix] of views) {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
     await page.addInitScript(() => { localStorage.setItem("a3d-consent", "denied"); localStorage.setItem("a3d-theme", "dark"); });
     await page.goto(`${BASE}/render/${slug}?view=${view}`, { waitUntil: "networkidle", timeout: 180000 });
     await page.waitForFunction(() => window.__renderReady === true, null, { timeout: 300000 });
-    await page.locator("canvas").screenshot({ path: `public/renders/${slug}${suffix}.jpg`, type: "jpeg", quality: 84 });
+    const data = await page.evaluate(() => window.__renderData);
+    await writeFile(`public/renders/${slug}${suffix}.jpg`, Buffer.from(data.split(",")[1], "base64"));
     console.log(`rendered ${slug}${suffix}`);
     await page.close();
   }

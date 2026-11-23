@@ -105,7 +105,6 @@ export function AssistantApp({ providerLabel }: { providerLabel: string }) {
             <ul className="mt-3 grid grid-cols-4 gap-2">
               {previews.map((src, i) => (
                 <li key={src} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={src} alt={`Land photo ${i + 1}`} className="aspect-square w-full rounded object-cover" />
                   <button type="button" onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="absolute right-1 top-1 rounded bg-canvas/80 px-1.5 text-xs text-ink" aria-label={`Remove photo ${i + 1}`}>×</button>
                 </li>

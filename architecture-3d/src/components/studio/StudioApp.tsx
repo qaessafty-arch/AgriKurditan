@@ -204,6 +204,18 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
     { id: "inspect", label: "Inspect" },
   ];
 
+  const actions = (
+    <>
+            <Button size="sm" variant="overlay" onClick={takeSnapshot}>Snapshot</Button>
+            <Button size="sm" variant="overlay" onClick={openCompare}>Compare</Button>
+            <Button size="sm" variant="overlay" onClick={() => setDialog("export")}>Export image</Button>
+            <Button size="sm" variant="overlay" onClick={() => setDialog("summary")}>Summary</Button>
+            <Button size="sm" onClick={() => { if (!designName) setDesignName(`${plan.name} variation`); setDialog("save"); }}>
+              {designId ? (dirty ? "Save changes" : "Saved") : "Save design"}
+            </Button>
+          </>
+  );
+
   return (
     <div className="lg:grid lg:h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1fr)_380px]">
       <div ref={stageRef} className="relative h-[58dvh] min-h-[340px] bg-canvas lg:h-full">
@@ -248,14 +260,8 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
               </IconButton>
             </div>
           </div>
-          <div className="pointer-events-auto flex flex-wrap gap-2">
-            <Button size="sm" variant="overlay" onClick={takeSnapshot}>Snapshot</Button>
-            <Button size="sm" variant="overlay" onClick={openCompare}>Compare</Button>
-            <Button size="sm" variant="overlay" onClick={() => setDialog("export")}>Export image</Button>
-            <Button size="sm" variant="overlay" onClick={() => setDialog("summary")}>Summary</Button>
-            <Button size="sm" onClick={() => { if (!designName) setDesignName(`${plan.name} variation`); setDialog("save"); }}>
-              {designId ? (dirty ? "Save changes" : "Saved") : "Save design"}
-            </Button>
+          <div className="pointer-events-auto hidden flex-wrap gap-2 md:flex">
+            {actions}
           </div>
         </div>
 
@@ -268,6 +274,8 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
           </div>
         )}
       </div>
+
+      <div className="no-scrollbar flex gap-2 overflow-x-auto border-b hairline bg-surface px-3 py-2 md:hidden" role="toolbar" aria-label="Design actions">{actions}</div>
 
       <aside className="flex flex-col border-l hairline bg-surface/60 lg:overflow-hidden" aria-label="Design options">
         <div role="tablist" aria-label="Option groups" className="no-scrollbar flex shrink-0 overflow-x-auto border-b hairline bg-surface">

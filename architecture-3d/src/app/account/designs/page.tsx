@@ -19,7 +19,6 @@ export default async function DesignsPage() {
             const thumb = uploadUrl(d.thumbnailId);
             return (
               <li key={d.id} className="card overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {thumb ? <img src={thumb} alt="" className="aspect-[16/10] w-full object-cover" /> : <div className="aspect-[16/10] bg-surface" />}
                 <div className="space-y-3 p-4">
                   <div><p className="font-medium text-ink">{d.name}</p><p className="text-xs text-muted">{getPlan(d.presetId).name} · updated {dateLabel(d.updatedAt)}</p></div>
