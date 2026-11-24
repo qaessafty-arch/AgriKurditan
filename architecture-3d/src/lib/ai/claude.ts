@@ -4,6 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { env } from "@/lib/env";
 import { briefOutputSchema, type BriefInput, type BriefOutput } from "./schema";
 import { PLANS } from "@/three/plans";
+import { LOCALE_META, type Locale } from "@/i18n/config";
 
 export interface Photo { mime: "image/jpeg" | "image/png" | "image/webp"; base64: string }
 
@@ -21,7 +22,7 @@ Rules:
 
 let client: Anthropic | null = null;
 
-export async function claudeBrief(input: BriefInput, photos: Photo[]): Promise<{ output: BriefOutput; model: string }> {
+export async function claudeBrief(input: BriefInput, photos: Photo[], locale: Locale = "en"): Promise<{ output: BriefOutput; model: string }> {
   client ??= new Anthropic({ apiKey: env.anthropicKey, maxRetries: 2, timeout: 120_000 });
   const brief = JSON.stringify(input, null, 2);
   try {
@@ -39,7 +40,7 @@ export async function claudeBrief(input: BriefInput, photos: Photo[]): Promise<{
             ...photos.map((p) => ({ type: "image" as const, source: { type: "base64" as const, media_type: p.mime, data: p.base64 } })),
             {
               type: "text" as const,
-              text: `${photos.length ? `The ${photos.length} image(s) above are photographs of the client's land.\n\n` : ""}<client_brief>\n${brief}\n</client_brief>\n\nPrepare the preliminary design brief.`,
+              text: `${photos.length ? `The ${photos.length} image(s) above are photographs of the client's land.\n\n` : ""}<client_brief>\n${brief}\n</client_brief>\n\nPrepare the preliminary design brief. Write every text field in ${LOCALE_META[locale].english}${locale === "ckb" ? " using Kurdish Arabic script (Sorani orthography)" : ""}; keep enum values and numbers as specified by the schema.`,
             },
           ],
         },

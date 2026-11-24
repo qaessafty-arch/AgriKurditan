@@ -2,9 +2,14 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { LoginForm } from "@/components/auth/AuthForms";
+import { getI18n } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Sign in", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const { m } = await getI18n();
+  return { title: m.auth.signInTitle, robots: { index: false } };
+}
 
-export default function LoginPage() {
-  return <AuthShell title="Sign in" subtitle="Access saved designs, quotes, consultations and orders."><Suspense><LoginForm /></Suspense></AuthShell>;
+export default async function Page() {
+  const { m } = await getI18n();
+  return <AuthShell title={m.auth.signInTitle} subtitle={m.auth.signInSubtitle}><Suspense><LoginForm /></Suspense></AuthShell>;
 }

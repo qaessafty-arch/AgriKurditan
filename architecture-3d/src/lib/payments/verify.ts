@@ -19,7 +19,7 @@ export async function decidePayment(paymentId: string, staffId: string, decision
       db.order.update({ where: { id: order.id }, data: { status: "PENDING_PAYMENT" } }),
     ]);
     await audit("payment.rejected", { actorId: staffId, target: order.reference, ip, meta: { reason } });
-    await notifyUser(order.userId, `Payment for ${order.reference} could not be verified`, reason, `/account/orders/${order.id}`, order.user.email);
+    await notifyUser(order.userId, "paymentRejected", { ref: order.reference, reason }, `/account/orders/${order.id}`, order.user.email);
     return;
   }
 
@@ -43,5 +43,7 @@ export async function decidePayment(paymentId: string, staffId: string, decision
     }
   });
   await audit("payment.verified", { actorId: staffId, target: order.reference, ip, meta: { amount: payment.amount.toString(), currency: payment.currency } });
-  await notifyUser(order.userId, `Payment received for ${order.reference}`, `Thank you. ${order.itemName} is now active on your account.`, `/account/orders/${order.id}`, order.user.email);
+  const loc = order.user.locale as "en" | "ar" | "ckb";
+  const item = (order.offering.translations as Record<string, { name?: string }> | null)?.[loc]?.name ?? order.itemName;
+  await notifyUser(order.userId, "paymentReceived", { ref: order.reference, item }, `/account/orders/${order.id}`, order.user.email);
 }

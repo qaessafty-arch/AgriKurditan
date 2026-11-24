@@ -25,8 +25,8 @@ const config: Config = {
         "line-strong": "var(--line-strong)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "Georgia", "serif"],
+        sans: ["var(--font-ui)", "system-ui", "sans-serif"],
+        display: ["var(--font-head)", "Georgia", "serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       fontSize: {

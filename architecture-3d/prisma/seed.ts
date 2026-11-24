@@ -11,6 +11,8 @@ import { generateBuilding } from "../src/three/generate";
 import { getPlan } from "../src/three/plans";
 import { mergeConfig, type BuildingConfig } from "../src/three/config";
 
+import { OFFERING_TR, PROJECT_TR, SERVICE_TR } from "./translations";
+
 const db = new PrismaClient();
 
 const SERVICES = [
@@ -154,7 +156,7 @@ const PROJECTS: { slug: string; title: string; preset: string; patch?: Partial<{
 async function main() {
   // Services
   for (const [i, s] of SERVICES.entries()) {
-    const data = { name: s.name, tagline: s.tagline, description: s.description, benefits: s.benefits, process: s.process.map(([title, detail]) => ({ title, detail })), heroPreset: s.heroPreset, sortOrder: i };
+    const data = { name: s.name, tagline: s.tagline, description: s.description, benefits: s.benefits, process: s.process.map(([title, detail]) => ({ title, detail })), heroPreset: s.heroPreset, sortOrder: i, translations: SERVICE_TR[s.slug] ?? {} };
     await db.service.upsert({ where: { slug: s.slug }, create: { slug: s.slug, ...data }, update: data });
   }
   const services = Object.fromEntries((await db.service.findMany()).map((s) => [s.slug, s.id]));
@@ -162,13 +164,18 @@ async function main() {
   // Offerings — only created if missing, so admin price edits are never overwritten by re-seeding.
   for (const o of OFFERINGS) {
     const exists = await db.offering.findUnique({ where: { slug: o.slug } });
-    if (exists) continue;
+    if (exists) {
+      // Prices are never overwritten; translations are filled in only if missing.
+      const tr = exists.translations as Record<string, unknown> | null;
+      if (OFFERING_TR[o.slug] && (!tr || Object.keys(tr).length === 0)) await db.offering.update({ where: { id: exists.id }, data: { translations: OFFERING_TR[o.slug] } });
+      continue;
+    }
     await db.offering.create({
       data: {
         slug: o.slug, kind: o.kind, name: o.name, summary: o.summary, features: o.features,
         price: o.price, currency: "USD", interval: o.interval ?? "ONE_TIME", entitlement: o.entitlement,
         audience: o.audience ?? [], highlighted: o.highlighted ?? false, sortOrder: o.sortOrder,
-        serviceId: o.service ? services[o.service] : undefined,
+        serviceId: o.service ? services[o.service] : undefined, translations: OFFERING_TR[o.slug] ?? {},
       },
     });
   }
@@ -189,7 +196,7 @@ async function main() {
       title: p.title, summary: p.summary, description: p.description, styles: p.styles, categories: p.categories,
       config, presetId: plan.id, specs, challenge: p.challenge, solution: p.solution, outcome: p.outcome,
       areaM2: m.stats.grossFloorArea, floors: m.stats.floors, isConcept: true, status: ProjectStatus.PUBLISHED,
-      featured: p.featured ?? false, serviceId: services[p.service],
+      featured: p.featured ?? false, serviceId: services[p.service], translations: PROJECT_TR[p.slug] ?? {},
     };
     await db.project.upsert({ where: { slug: p.slug }, create: { slug: p.slug, ...data }, update: data });
   }

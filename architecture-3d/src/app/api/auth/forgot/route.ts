@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { email } from "@/lib/validation";
 import { LIMITS } from "@/lib/security/rate-limit";
 import { hashToken, randomToken } from "@/lib/security/tokens";
-import { sendEmail } from "@/lib/email";
+import { sendLocalizedEmail } from "@/lib/notify";
+import { isLocale, localePath } from "@/i18n/config";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
 import { HttpError } from "@/lib/errors";
@@ -23,9 +24,8 @@ export const POST = route({ rate: ["reset", LIMITS.passwordReset] }, async (req,
   await db.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
   const token = randomToken();
   await db.passwordResetToken.create({ data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 3600_000) } });
-  const link = `${env.appUrl}/reset-password?token=${token}`;
-  const result = await sendEmail(user.email, "Reset your Architecture 3D password",
-    `Someone asked to reset the password for this account.\n\nReset it here (valid for one hour):\n${link}\n\nIf this was not you, ignore this email; your password stays the same.`);
+  const loc = isLocale(user.locale) ? user.locale : "en";
+  const result = await sendLocalizedEmail(loc, user.email, "passwordReset", { link: `${env.appUrl}${localePath("/reset-password", loc)}?token=${token}` });
   await audit("auth.reset_requested", { actorId: user.id, ip, meta: { emailed: result.sent } });
   if (!result.sent && !env.isProduction) {
     return { message: "Development mode: email is not configured, so the reset link was written to the server log." };

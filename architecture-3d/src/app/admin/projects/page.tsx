@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/client";
 import { db } from "@/lib/db";
 import { requirePageCapability } from "@/lib/auth/session";
 import { titleCase } from "@/lib/format";

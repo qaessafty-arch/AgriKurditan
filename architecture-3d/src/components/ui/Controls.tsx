@@ -28,7 +28,7 @@ export function Segmented<T extends string>({
             title={o.note ?? o.label}
             onClick={() => onChange(o.id)}
             className={cn(
-              "rounded border text-left transition-colors",
+              "rounded border text-start transition-colors",
               size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm",
               active ? "border-accent bg-accent/15 text-ink" : "border-line text-muted hover:border-line-strong hover:text-ink",
             )}
@@ -86,7 +86,7 @@ export function Toggle({ label, checked, onChange, hint }: { label: string; chec
         onClick={() => onChange(!checked)}
         className={cn("relative h-6 w-11 shrink-0 rounded-full border transition-colors", checked ? "border-accent bg-accent/70" : "border-line-strong bg-ink/10")}
       >
-        <span className={cn("absolute left-0.5 top-0.5 h-4 w-4 rounded-full transition-transform", checked ? "translate-x-5 bg-[#101114]" : "translate-x-0 bg-ink")} />
+        <span className={cn("absolute start-0.5 top-0.5 h-4 w-4 rounded-full transition-transform", checked ? "translate-x-5 rtl:-translate-x-5 bg-[#101114]" : "translate-x-0 bg-ink")} />
       </button>
     </div>
   );

@@ -3,10 +3,15 @@
  * can audit. Used when no AI provider is configured, and as a fallback.
  */
 import type { BriefInput, BriefOutput } from "./schema";
+import { RULES_TEXT, TYPE_WORD } from "./rules-text";
+import { LOCALE_META, fmt, type Locale } from "@/i18n/config";
 
 const round = (n: number) => Math.round(n);
 
-export function rulesBrief(input: BriefInput, photoCount: number): BriefOutput {
+export function rulesBrief(input: BriefInput, photoCount: number, locale: Locale = "en"): BriefOutput {
+  const X = RULES_TEXT[locale];
+  const n = (v: number) => new Intl.NumberFormat(LOCALE_META[locale].numberLocale, { maximumFractionDigits: 0 }).format(Math.round(v));
+  const sp = (k: keyof typeof X.spaces, vars: Record<string, string | number> = {}) => [fmt(X.spaces[k][0], vars), X.spaces[k][1]] as const;
   const { landWidth: W, landDepth: D, buildingType, styles } = input;
   const plot = W * D;
   // Indicative setbacks: 3 m front and rear, 2 m sides (local regulations vary and must be confirmed).
@@ -16,26 +21,26 @@ export function rulesBrief(input: BriefInput, photoCount: number): BriefOutput {
 
   const program: BriefOutput["program"] = [];
   let net = 0;
-  const add = (space: string, area: number, notes: string) => { program.push({ space, areaM2: round(area), notes }); net += area; };
+  const add = (space: string, notes: string, area: number) => { program.push({ space, areaM2: round(area), notes }); net += area; };
 
   if (buildingType === "commercial") {
-    add("Entrance lobby", 40, "Double-height if budget allows; visible from the street.");
-    add("Lettable workspace", Math.max(150, maxFootprint * 0.7), "Open floor plates around a single core for flexible leasing.");
-    add("Meeting and amenity rooms", 50, "Shared between tenants.");
-    add("Stair and lift core", 30, "Positioned to keep floor plates column-free.");
-    add("Services and storage", 25, "Plant, refuse and storage at ground level.");
+    add(...sp("lobby"), 40);
+    add(...sp("lettable"), Math.max(150, maxFootprint * 0.7));
+    add(...sp("meeting"), 50);
+    add(...sp("core"), 30);
+    add(...sp("services"), 25);
   } else {
     const bedrooms = input.bedrooms ?? 3;
-    add("Living room", 32, "Oriented to the garden, shaded from western sun.");
-    add("Kitchen and dining", 30, "Connected to the terrace for outdoor dining.");
-    add("Entrance hall", 10, "Guest WC and storage off the entrance.");
-    if (bedrooms > 0) add("Master suite", 26, "Bedroom with en-suite and dressing area.");
-    if (bedrooms > 1) add(`Bedrooms (${bedrooms - 1})`, (bedrooms - 1) * 15, "Each with built-in storage.");
-    add(`Bathrooms (${Math.max(1, Math.ceil(bedrooms / 2))})`, Math.max(1, Math.ceil(bedrooms / 2)) * 6, "Including one accessible bathroom on the ground floor.");
-    add("Guest room or study", 14, "Flexible room for guests, work or elderly relatives.");
+    add(...sp("living"), 32);
+    add(...sp("kitchen"), 30);
+    add(...sp("entry"), 10);
+    if (bedrooms > 0) add(...sp("master"), 26);
+    if (bedrooms > 1) add(...sp("bedrooms", { n: n(bedrooms - 1) }), (bedrooms - 1) * 15);
+    add(...sp("baths", { n: n(Math.max(1, Math.ceil(bedrooms / 2))) }), Math.max(1, Math.ceil(bedrooms / 2)) * 6);
+    add(...sp("guest"), 14);
   }
   const gross = net * 1.15; // walls and circulation
-  program.push({ space: "Walls and circulation (≈15%)", areaM2: round(net * 0.15), notes: "Corridors, stairs and wall thickness." });
+  program.push({ space: X.spaces.circulation[0], areaM2: round(net * 0.15), notes: X.spaces.circulation[1] });
 
   const minFloors = maxFootprint > 0 ? Math.ceil(gross / maxFootprint) : 1;
   const floors = Math.max(input.floors ?? minFloors, minFloors);
@@ -62,47 +67,27 @@ export function rulesBrief(input: BriefInput, photoCount: number): BriefOutput {
   if (has("regional")) Object.assign(cfg, { wall: "limestone", landscape: "meadow", windows: "punched" });
   if (buildingType === "commercial") Object.assign(cfg, { wall: "concrete", accent: "basalt", windows: "ribbon", glass: "grey", roof: "green", pool: false, furniture: "minimal", floor: "concrete" });
 
-  const wallReason: Record<string, string> = {
-    travertine: "Thermal mass moderates hot summer days; durable and repairable.",
-    limestone: "Regionally sourced stone with good thermal mass and a long service life.",
-    concrete: "Robust and fire-resistant; exposed finishes reduce maintenance and cladding cost.",
-    plaster: "Economical, breathable render; easy to repair and repaint.",
-  };
-  materials.push({ name: cfg.wall === "travertine" ? "Travertine cladding" : cfg.wall === "limestone" ? "Limestone" : cfg.wall === "concrete" ? "Board-formed concrete" : "Mineral plaster", reason: wallReason[cfg.wall] ?? "" });
-  materials.push({ name: cfg.glass === "clear" ? "Low-iron double glazing" : "Solar-control double glazing", reason: "Reduces solar heat gain on south and west facades." });
-  if (cfg.pattern === "fins" || cfg.pattern === "louvers") materials.push({ name: cfg.pattern === "fins" ? "Vertical shading fins" : "Horizontal louvres", reason: cfg.pattern === "fins" ? "Blocks low-angle east and west sun." : "Shades high summer sun on south facades." });
-  if (cfg.roof === "green") materials.push({ name: "Extensive green roof", reason: "Insulates the top floor and retains stormwater." });
+  const wallKey = (["travertine", "limestone", "concrete"] as const).find((k) => k === cfg.wall) ?? "plaster";
+  materials.push({ name: X.materials[wallKey][0], reason: X.materials[wallKey][1] });
+  materials.push({ name: X.materials[cfg.glass === "clear" ? "lowIron" : "solar"][0], reason: X.glassReason });
+  if (cfg.pattern === "fins" || cfg.pattern === "louvers") materials.push({ name: X.materials[cfg.pattern][0], reason: X.materials[cfg.pattern][1] });
+  if (cfg.roof === "green") materials.push({ name: X.materials.green[0], reason: X.materials.green[1] });
 
   const perM2 = input.budget && gross > 0 ? input.budget / gross : null;
 
   return {
-    summary: `A ${floors}-storey ${buildingType} building of about ${round(gross)} m² gross on a ${round(W)} × ${round(D)} m plot (${round(plot)} m²), with a footprint of roughly ${round(footprint)} m².`,
+    summary: fmt(X.summary, { floors: n(floors), type: TYPE_WORD[locale][buildingType], gross: n(gross), w: n(W), d: n(D), plot: n(plot), fp: n(footprint) }),
     siteObservations: [
-      `Indicative buildable zone after typical setbacks: ${round(bw)} × ${round(bd)} m (${round(buildable)} m²). Confirm setbacks with the local municipality.`,
-      `Assumed maximum plot coverage of 60% gives up to ${round(maxFootprint)} m² of footprint.`,
-      photoCount > 0
-        ? `${photoCount} site photo${photoCount > 1 ? "s were" : " was"} attached for the architect. The built-in engine does not analyse images.`
-        : "No site photos attached; photos help the architect assess slope, access, neighbours and views.",
+      fmt(X.setbacks, { bw: n(bw), bd: n(bd), ba: n(buildable) }),
+      fmt(X.coverage, { max: n(maxFootprint) }),
+      photoCount > 1 ? fmt(X.photos, { n: n(photoCount) }) : photoCount === 1 ? X.photosOne : X.noPhotos,
     ],
     program,
-    massing: floors === 1
-      ? "Single-storey building set back from the street, opening to a garden on the private side."
-      : `Compact ${floors}-storey volume, with upper floors shading the ground-floor glazing and terraces facing the garden.`,
+    massing: floors === 1 ? X.massingOne : fmt(X.massingMany, { floors: n(floors) }),
     materials,
-    considerations: [
-      "Orient main living spaces away from direct western sun; shade glazing on south and west facades.",
-      "Plan for cross-ventilation and ceiling fans to reduce cooling loads in summer.",
-      "Seismic design and foundations must be designed by a structural engineer after a soil investigation.",
-      "Confirm zoning, height limits, setbacks and parking requirements with the municipality before design development.",
-    ],
-    budgetNote: perM2 !== null
-      ? `Your budget corresponds to about ${Math.round(perM2).toLocaleString("en-US")} ${input.currency} per m² of gross floor area. Ask the architect whether this suits the intended specification level in your area.`
-      : "No budget was given. A budget range helps the architect set the right specification level.",
-    nextSteps: [
-      "Book a consultation to review the brief, site and budget with an architect.",
-      "Commission a topographic survey and soil investigation.",
-      "Open the suggested design in the studio and adjust materials and layout preferences.",
-    ],
+    considerations: X.considerations,
+    budgetNote: perM2 !== null ? fmt(X.budget, { perM2: n(perM2), currency: input.currency }) : X.noBudget,
+    nextSteps: X.nextSteps,
     suggestedPlanId: planId,
     suggestedConfig: cfg,
   };

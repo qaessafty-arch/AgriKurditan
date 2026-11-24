@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/client";
 import { requirePageCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { dashboardMetrics } from "@/lib/analytics";

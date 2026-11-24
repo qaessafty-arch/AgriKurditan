@@ -53,7 +53,7 @@ export function BarChart({ title, data, format = (v) => String(v), height = 180 
       </svg>
       <details className="mt-2 text-xs text-muted">
         <summary className="cursor-pointer">Show table</summary>
-        <table className="table-base mt-2"><tbody>{data.map((d) => <tr key={d.label}><td>{d.label}</td><td className="text-right font-mono">{format(d.value)}</td></tr>)}</tbody></table>
+        <table className="table-base mt-2"><tbody>{data.map((d) => <tr key={d.label}><td>{d.label}</td><td className="text-end font-mono">{format(d.value)}</td></tr>)}</tbody></table>
       </details>
     </figure>
   );

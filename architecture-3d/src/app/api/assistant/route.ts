@@ -4,7 +4,10 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { LIMITS } from "@/lib/security/rate-limit";
 import { storeFile } from "@/lib/storage";
 import { generateBrief } from "@/lib/ai";
-import { briefInputSchema, DISCLAIMER } from "@/lib/ai/schema";
+import { briefInputSchema } from "@/lib/ai/schema";
+import { RULES_TEXT } from "@/lib/ai/rules-text";
+import { requestLocale } from "@/i18n/errors";
+import { isLocale } from "@/i18n/config";
 import { badRequest } from "@/lib/errors";
 import type { Photo } from "@/lib/ai/claude";
 
@@ -38,9 +41,11 @@ export const POST = route({ rate: ["ai", LIMITS.ai] }, async (req) => {
     photos.push({ mime: up.mime as Photo["mime"], base64: buf.toString("base64") });
   }
 
-  const result = await generateBrief(input, photos);
+  const formLocale = form.get("locale");
+  const locale = isLocale(formLocale) ? formLocale : requestLocale(req.headers);
+  const result = await generateBrief(input, photos, locale);
   const brief = await db.aiBrief.create({
     data: { userId: user?.id, provider: result.provider, model: result.model, input, output: result.output, uploadIds },
   });
-  return { id: brief.id, ...result, disclaimer: DISCLAIMER };
+  return { id: brief.id, ...result, disclaimer: RULES_TEXT[locale].disclaimer };
 });

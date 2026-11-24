@@ -5,8 +5,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { email, optionalText, phone, text } from "@/lib/validation";
 import { LIMITS } from "@/lib/security/rate-limit";
 import { humanReference } from "@/lib/security/tokens";
-import { notifyAdmins, notifyUser } from "@/lib/notify";
-import { sendEmail } from "@/lib/email";
+import { notifyAdmins, notifyUser, sendLocalizedEmail } from "@/lib/notify";
+import { requestLocale } from "@/i18n/errors";
 import { ownedBriefId, ownedDesignId, verifyDraftKey } from "@/lib/leads";
 import { badRequest } from "@/lib/errors";
 
@@ -57,7 +57,7 @@ export const POST = route({ rate: ["form", LIMITS.publicForm] }, async (req) => 
     : await db.quoteRequest.create({ data: { ...data, reference: humanReference("Q") } });
 
   await notifyAdmins(`Quote request ${q.reference}`, `${q.name} (${q.email})${service ? ` — ${service.name}` : ""}${q.designId ? " · design attached" : ""}`, "/admin/quotes");
-  if (user) await notifyUser(user.id, "Quote request received", `Reference ${q.reference}. We will reply with a quote or questions.`, "/account/quotes");
-  const mail = await sendEmail(q.email!, `Your quote request ${q.reference}`, `Hello ${q.name},\n\nWe received your quote request and will reply with a proposal or questions.\n\nReference: ${q.reference}`);
+  if (user) await notifyUser(user.id, "quoteReceived", { ref: q.reference }, "/account/quotes");
+  const mail = await sendLocalizedEmail(requestLocale(req.headers), q.email!, "quoteConfirm", { name: q.name ?? "", ref: q.reference });
   return { reference: q.reference, emailed: mail.sent };
 });

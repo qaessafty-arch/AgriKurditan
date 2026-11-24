@@ -4,9 +4,10 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; f
 
 export async function api<T = unknown>(url: string, init: { method?: string; body?: unknown } = {}): Promise<ApiResult<T>> {
   try {
+    const locale = typeof document !== "undefined" ? document.documentElement.lang || "en" : "en";
     const res = await fetch(url, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-      headers: init.body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers: { "x-a3d-locale": locale, ...(init.body === undefined ? {} : { "Content-Type": "application/json" }) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       credentials: "same-origin",
     });
@@ -16,6 +17,6 @@ export async function api<T = unknown>(url: string, init: { method?: string; bod
     }
     return { ok: true, data: json as T };
   } catch {
-    return { ok: false, status: 0, error: "Network error. Check your connection and try again." };
+    return { ok: false, status: 0, error: typeof document !== "undefined" && document.documentElement.dir === "rtl" ? (document.documentElement.lang === "ckb" ? "هەڵەی پەیوەندی. ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدەرەوە." : "خطأ في الاتصال. تحقّق من الإنترنت وحاول مرة أخرى.") : "Network error. Check your connection and try again." };
   }
 }

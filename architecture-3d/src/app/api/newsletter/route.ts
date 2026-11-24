@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { email, optionalText } from "@/lib/validation";
 import { LIMITS } from "@/lib/security/rate-limit";
 import { hashToken, randomToken } from "@/lib/security/tokens";
-import { sendEmail } from "@/lib/email";
+import { sendLocalizedEmail } from "@/lib/notify";
+import { requestLocale } from "@/i18n/errors";
 import { env } from "@/lib/env";
 
 /** Double opt-in: subscribers are only "confirmed" after clicking the emailed link. */
@@ -18,8 +19,7 @@ export const POST = route({ rate: ["form", LIMITS.publicForm] }, async (req) => 
     create: { email: input.email, tokenHash: hashToken(token), source: input.source },
     update: { tokenHash: hashToken(token), unsubscribedAt: null },
   });
-  const mail = await sendEmail(input.email, "Confirm your subscription",
-    `Please confirm you want project notes from Architecture 3D:\n${env.appUrl}/api/newsletter/confirm?token=${token}\n\nIf you did not ask for this, ignore this email.`);
+  const mail = await sendLocalizedEmail(requestLocale(req.headers), input.email, "newsletterConfirm", { link: `${env.appUrl}/api/newsletter/confirm?token=${token}` });
   return {
     message: mail.sent
       ? "Almost done: check your inbox and confirm your subscription."

@@ -1,6 +1,5 @@
 "use client";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SceneCanvas } from "@/components/three/SceneCanvas";
 import { BuildingScene, useBuildingModel } from "@/components/three/BuildingScene";
@@ -15,12 +14,16 @@ import { IconButton } from "@/components/ui/Controls";
 import { useDesign } from "@/store/design";
 import { useViewer } from "@/store/viewer";
 import { PLANS, getPlan } from "@/three/plans";
-import { coerceConfig, describeConfig, diffConfigs, type BuildingConfig } from "@/three/config";
-import { generateBuilding, summarizeModel, type BuildingStats } from "@/three/generate";
+import { coerceConfig, type BuildingConfig } from "@/three/config";
+import { generateBuilding, type BuildingStats } from "@/three/generate";
 import { decodeConfig, encodeConfig } from "@/three/share";
 import { api } from "@/lib/client-api";
 import { cn } from "@/lib/cn";
 import { track } from "@/components/layout/ConsentBanner";
+import { Link, useI18n, useLocaleRouter } from "@/i18n/client";
+import { fmt, type Locale } from "@/i18n/config";
+import { describeConfigL, diffConfigsL, num, planDescription, planName, summarizeModelL } from "@/i18n/labels";
+import type { Messages } from "@/i18n/messages/en";
 
 type Tab = "exterior" | "interior" | "environment" | "view" | "inspect";
 interface SavedDesign { id: string; name: string; presetId: string; config: unknown; thumbnail: string | null; updatedAt: string }
@@ -49,10 +52,13 @@ function download(url: string, filename: string) {
 }
 
 export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro: boolean; freeLimit: number }) {
+  const { m, locale } = useI18n();
+  const S = m.studio;
   const params = useSearchParams();
-  const router = useRouter();
+  const router = useLocaleRouter();
   const { planId, config, past, future, dirty, undo, redo, load, setPlan, restoreDefaults, markSaved } = useDesign();
   const plan = getPlan(planId);
+  const pName = planName(m, plan);
   const model = useBuildingModel(planId, config);
   const [tab, setTab] = useState<Tab>("exterior");
   const [designId, setDesignId] = useState<string | null>(null);
@@ -83,7 +89,7 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
           setDesignId(r.data.design.id);
           setDesignName(r.data.design.name);
         } else {
-          setNotice({ kind: "error", text: r.status === 401 ? "Sign in to open your saved design." : r.error });
+          setNotice({ kind: "error", text: r.status === 401 ? S.signInSave : r.error });
           load(plan.id, plan.defaultConfig);
         }
       });
@@ -96,7 +102,7 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
       if (draft) return load(getPlan(draft.planId).id, coerceConfig(draft.config));
     } catch { /* no draft */ }
     load(plan.id, plan.defaultConfig);
-  }, [params, load]);
+  }, [params, load, S.signInSave]);
 
   // Keep a local draft so work survives a refresh even without an account.
   useEffect(() => {
@@ -148,7 +154,7 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
 
   // ── Actions ──
   const save = async (asNew: boolean) => {
-    if (!designName.trim()) return setNotice({ kind: "error", text: "Give the design a name." });
+    if (!designName.trim()) return setNotice({ kind: "error", text: S.nameRequired });
     setBusy(true);
     const thumbnail = await thumbnailFrom(await capture(1));
     const body = { name: designName.trim(), presetId: planId, config, thumbnail };
@@ -160,15 +166,15 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
     setDesignId(r.data.design.id);
     markSaved();
     setDialog(null);
-    setNotice({ kind: "ok", text: `Saved “${designName.trim()}”.` });
+    setNotice({ kind: "ok", text: fmt(S.savedMsg, { name: designName.trim() }) });
     router.replace(`/studio?design=${r.data.design.id}`, { scroll: false });
   };
 
   const takeSnapshot = async () => {
     const thumbnail = await thumbnailFrom(await capture(1), 480);
     const n = snapshots.length + 1;
-    setSnapshots((s) => [...s, { id: `snap-${Date.now()}`, name: `Snapshot ${n}`, presetId: planId, config: structuredClone(config), thumbnail }].slice(-6));
-    setNotice({ kind: "ok", text: `Snapshot ${n} taken. Open Compare to view it beside the current design.` });
+    setSnapshots((s) => [...s, { id: `snap-${Date.now()}`, name: fmt(S.snapshotName, { n: num(locale, n) }), presetId: planId, config: structuredClone(config), thumbnail }].slice(-6));
+    setNotice({ kind: "ok", text: fmt(S.snapshotTaken, { n: num(locale, n) }) });
   };
 
   const openCompare = async () => {
@@ -181,104 +187,88 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
     setBusy(true);
     const url = await capture(scale);
     setBusy(false);
-    download(url, `${plan.name.replace(/\s+/g, "-").toLowerCase()}-${scale > 1 ? "4k" : "hd"}.png`);
+    download(url, `${plan.id}-${scale > 1 ? "4k" : "hd"}.png`);
     setDialog(null);
   };
 
   const summaryText = useMemo(() => {
-    const lines = [`${plan.name} — design summary`, "", ...summarizeModel(model).map((l) => `• ${l}`), ""];
-    for (const s of describeConfig(config)) {
-      lines.push(s.section.toUpperCase());
-      for (const r of s.rows) lines.push(`  ${r.label}: ${r.value}`);
+    const lines = [fmt(S.summaryHeading, { name: pName }), "", ...summarizeModelL(m, locale, model).map((l) => `• ${l}`), ""];
+    for (const sec of describeConfigL(m, locale, config)) {
+      lines.push(sec.section);
+      for (const r of sec.rows) lines.push(`  ${r.label}: ${r.value}`);
       lines.push("");
     }
-    lines.push("Preliminary design study. Not a construction document; structural and code compliance require review by licensed professionals.");
+    lines.push(fmt(S.summaryDisclaimer, { area: num(locale, model.stats.grossFloorArea) }));
     return lines.join("\n");
-  }, [plan, model, config]);
+  }, [m, locale, pName, model, config, S]);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "exterior", label: "Exterior" },
-    { id: "interior", label: "Interior" },
-    { id: "environment", label: "Environment" },
-    { id: "view", label: "View" },
-    { id: "inspect", label: "Inspect" },
-  ];
+  const tabs: { id: Tab; label: string }[] = (["exterior", "interior", "environment", "view", "inspect"] as const).map((id) => ({ id, label: S.tabs[id] }));
 
   const actions = (
     <>
-            <Button size="sm" variant="overlay" onClick={takeSnapshot}>Snapshot</Button>
-            <Button size="sm" variant="overlay" onClick={openCompare}>Compare</Button>
-            <Button size="sm" variant="overlay" onClick={() => setDialog("export")}>Export image</Button>
-            <Button size="sm" variant="overlay" onClick={() => setDialog("summary")}>Summary</Button>
-            <Button size="sm" onClick={() => { if (!designName) setDesignName(`${plan.name} variation`); setDialog("save"); }}>
-              {designId ? (dirty ? "Save changes" : "Saved") : "Save design"}
-            </Button>
-          </>
+      <Button size="sm" variant="overlay" onClick={takeSnapshot}>{S.snapshot}</Button>
+      <Button size="sm" variant="overlay" onClick={openCompare}>{S.compare}</Button>
+      <Button size="sm" variant="overlay" onClick={() => setDialog("export")}>{S.export}</Button>
+      <Button size="sm" variant="overlay" onClick={() => setDialog("summary")}>{S.summary}</Button>
+      <Button size="sm" onClick={() => { if (!designName) setDesignName(fmt(S.variation, { name: pName })); setDialog("save"); }}>
+        {designId ? (dirty ? S.saveChanges : S.savedState) : S.saveDesign}
+      </Button>
+    </>
   );
+  const nextStudio = encodeURIComponent(`/studio?plan=${planId}&config=${encodeConfig(config)}`);
 
   return (
     <div className="lg:grid lg:h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1fr)_380px]">
       <div ref={stageRef} className="relative h-[58dvh] min-h-[340px] bg-canvas lg:h-full">
-        <SceneCanvas
-          className="absolute inset-0"
-          preserveDrawingBuffer
-          label={`Customisable 3D model of ${plan.name}`}
+        <SceneCanvas className="absolute inset-0" preserveDrawingBuffer label={fmt(S.modelLabel, { name: pName })}
           onPointerMissed={() => useViewer.getState().set({ inspected: null, selectedRoom: null })}
           fallback={
             <div className="absolute inset-0 grid place-items-center bg-surface p-6 text-center">
               <div className="w-full max-w-2xl">
-                <ElevationDrawing model={model} className="mx-auto h-56 w-full text-stone" />
-                <p className="mt-4 text-sm text-muted">3D graphics (WebGL) are unavailable in this browser. You can still change options and request a quote; the elevation updates as you go.</p>
+                <ElevationDrawing model={model} className="mx-auto h-56 w-full text-stone" title={fmt(m.explorer.elevation, { name: pName })} />
+                <p className="mt-4 text-sm text-muted">{S.noWebgl}</p>
               </div>
             </div>
-          }
-        >
-          <BuildingScene model={model} config={config} interactive>
-            <MeasureOverlay />
-          </BuildingScene>
+          }>
+          <BuildingScene model={model} config={config} interactive><MeasureOverlay /></BuildingScene>
           <ExplorerCamera model={model} />
         </SceneCanvas>
 
-        {/* Toolbar */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-3 sm:p-4">
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <label className="glass flex items-center gap-2 rounded-lg border hairline px-3 py-2 text-sm">
-              <span className="sr-only sm:not-sr-only text-muted">Building</span>
-              <select className="bg-transparent font-medium text-ink outline-none" value={planId} onChange={(e) => setPlan(e.target.value)} aria-label="Building type">
-                {PLANS.map((p) => <option key={p.id} value={p.id} className="bg-canvas">{p.name}</option>)}
+              <span className="sr-only text-muted sm:not-sr-only">{m.explorer.building}</span>
+              <select className="bg-transparent font-medium text-ink outline-none" value={planId} onChange={(e) => setPlan(e.target.value)} aria-label={S.buildingType}>
+                {PLANS.map((p) => <option key={p.id} value={p.id} className="bg-canvas">{planName(m, p)}</option>)}
               </select>
             </label>
-            <div className="glass flex gap-1 rounded-lg border hairline p-1" role="toolbar" aria-label="History">
-              <IconButton label="Undo (Ctrl+Z)" onClick={undo} disabled={past.length === 0}>
-                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M7 4L3 8l4 4M3 8h8a4 4 0 010 8H8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+            <div className="glass flex gap-1 rounded-lg border hairline p-1" role="toolbar" aria-label={S.history}>
+              <IconButton label={S.undo} onClick={undo} disabled={past.length === 0}>
+                <svg className="rtl:-scale-x-100" width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M7 4L3 8l4 4M3 8h8a4 4 0 010 8H8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
               </IconButton>
-              <IconButton label="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={future.length === 0}>
-                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M11 4l4 4-4 4M15 8H7a4 4 0 000 8h3" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+              <IconButton label={S.redo} onClick={redo} disabled={future.length === 0}>
+                <svg className="rtl:-scale-x-100" width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M11 4l4 4-4 4M15 8H7a4 4 0 000 8h3" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
               </IconButton>
-              <IconButton label="Restore defaults" onClick={restoreDefaults}>
+              <IconButton label={S.restore} onClick={restoreDefaults}>
                 <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden><path d="M3 9a6 6 0 106-6H6M6 1v4h4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
               </IconButton>
             </div>
           </div>
-          <div className="pointer-events-auto hidden flex-wrap gap-2 md:flex">
-            {actions}
-          </div>
+          <div className="pointer-events-auto hidden flex-wrap gap-2 md:flex">{actions}</div>
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 flex justify-center p-3 sm:p-4">
-          <PresetBar className="max-w-full" />
-        </div>
+        <div className="absolute inset-x-0 bottom-0 flex justify-center p-3 sm:p-4"><PresetBar className="max-w-full" /></div>
         {notice && (
-          <div role="status" className={cn("absolute left-1/2 top-20 z-10 -translate-x-1/2 rounded-lg border px-4 py-2.5 text-sm shadow-panel", notice.kind === "ok" ? "border-success/40 bg-raised text-ink" : "border-danger/40 bg-raised text-danger")}>
+          <div role="status" className={cn("absolute inset-x-4 top-20 z-10 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-lg border px-4 py-2.5 text-sm shadow-panel", notice.kind === "ok" ? "border-success/40 bg-raised text-ink" : "border-danger/40 bg-raised text-danger")}>
             {notice.text}
           </div>
         )}
       </div>
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto border-b hairline bg-surface px-3 py-2 md:hidden" role="toolbar" aria-label="Design actions">{actions}</div>
+      <div className="no-scrollbar flex gap-2 overflow-x-auto border-b hairline bg-surface px-3 py-2 md:hidden" role="toolbar" aria-label={S.actions}>{actions}</div>
 
-      <aside className="flex flex-col border-l hairline bg-surface/60 lg:overflow-hidden" aria-label="Design options">
-        <div role="tablist" aria-label="Option groups" className="no-scrollbar flex shrink-0 overflow-x-auto border-b hairline bg-surface">
+      <aside className="flex flex-col border-s hairline bg-surface/60 lg:overflow-hidden" aria-label={S.options}>
+        <div role="tablist" aria-label={S.optionGroups} className="no-scrollbar flex shrink-0 overflow-x-auto border-b hairline bg-surface">
           {tabs.map((t) => (
             <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
               className={cn("shrink-0 flex-1 px-3 py-3 text-sm font-medium transition-colors", tab === t.id ? "border-b-2 border-accent text-ink" : "text-muted hover:text-ink")}>
@@ -287,7 +277,7 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
           ))}
         </div>
         <div className="flex-1 space-y-6 overflow-y-auto p-5">
-          {designId && <p className="text-xs text-muted">Editing <span className="text-ink">{designName}</span>{dirty ? " — unsaved changes" : ""}</p>}
+          {designId && <p className="text-xs text-muted">{S.editing} <span className="text-ink">{designName}</span>{dirty ? ` — ${S.unsaved}` : ""}</p>}
           {tab === "exterior" && <ExteriorPanel />}
           {tab === "interior" && <InteriorPanel />}
           {tab === "environment" && <EnvironmentPanel hasPool={Boolean(plan.pool)} />}
@@ -295,114 +285,99 @@ export function StudioApp({ signedIn, pro, freeLimit }: { signedIn: boolean; pro
           {tab === "inspect" && <Inspector model={model} config={config} />}
         </div>
         <div className="shrink-0 border-t hairline p-4">
-          <ButtonLink
-            href={designId && !dirty ? `/quote?design=${designId}` : "#"}
-            className="w-full"
+          <ButtonLink href={designId && !dirty ? `/quote?design=${designId}` : "#"} className="w-full"
             onClick={(e) => {
               if (designId && !dirty) return;
               e.preventDefault();
-              setNotice({ kind: "error", text: signedIn ? "Save the design first so we can attach it to your quote request." : "Sign in and save the design to attach it to a quote request." });
-              if (signedIn) { if (!designName) setDesignName(`${plan.name} variation`); setDialog("save"); }
-            }}
-          >
-            Request a quote for this design
+              setNotice({ kind: "error", text: signedIn ? S.needSave : S.needSignIn });
+              if (signedIn) { if (!designName) setDesignName(fmt(S.variation, { name: pName })); setDialog("save"); }
+            }}>
+            {S.requestQuote}
           </ButtonLink>
         </div>
       </aside>
 
-      {/* Save */}
-      <Dialog open={dialog === "save"} onClose={() => setDialog(null)} title={designId ? "Save design" : "Save to your account"}
+      <Dialog open={dialog === "save"} onClose={() => setDialog(null)} title={designId ? S.saveTitleExisting : S.saveTitle}
         footer={signedIn ? (
           <>
-            {designId && <Button variant="secondary" onClick={() => save(true)} loading={busy}>Save as new</Button>}
-            <Button onClick={() => save(false)} loading={busy}>{designId ? "Save changes" : "Save"}</Button>
+            {designId && <Button variant="secondary" onClick={() => save(true)} loading={busy}>{S.saveAsNew}</Button>}
+            <Button onClick={() => save(false)} loading={busy}>{designId ? S.saveChanges : m.common.save}</Button>
           </>
         ) : undefined}>
         {signedIn ? (
           <div className="space-y-3">
-            <label className="field-label" htmlFor="design-name">Design name</label>
+            <label className="field-label" htmlFor="design-name">{S.designName}</label>
             <input id="design-name" className="field" maxLength={80} value={designName} onChange={(e) => setDesignName(e.target.value)} autoFocus />
-            {!pro && <p className="field-hint">Your plan includes {freeLimit} saved designs. <Link className="text-accent-ink hover:underline" href="/pricing#studio-pro">Studio Pro</Link> removes the limit.</p>}
+            {!pro && <p className="field-hint">{fmt(S.freeLimit, { n: num(locale, freeLimit) })} <Link className="text-accent-ink hover:underline" href="/pricing#studio-pro">{S.studioPro}</Link> {S.proRemoves}</p>}
           </div>
         ) : (
           <div className="space-y-4 text-sm text-muted">
-            <p>Create a free account to save designs, compare versions and attach a design to a quote request. Your current work is kept as a draft in this browser.</p>
+            <p>{S.signedOutSave}</p>
             <div className="flex gap-2">
-              <ButtonLink href={`/login?next=${encodeURIComponent(`/studio?plan=${planId}&config=${encodeConfig(config)}`)}`}>Sign in</ButtonLink>
-              <ButtonLink variant="secondary" href={`/register?next=${encodeURIComponent(`/studio?plan=${planId}&config=${encodeConfig(config)}`)}`}>Create account</ButtonLink>
+              <ButtonLink href={`/login?next=${nextStudio}`}>{m.common.signIn}</ButtonLink>
+              <ButtonLink variant="secondary" href={`/register?next=${nextStudio}`}>{S.createAccount}</ButtonLink>
             </div>
           </div>
         )}
       </Dialog>
 
-      {/* Compare */}
-      <Dialog open={dialog === "compare"} onClose={() => { setDialog(null); setCompareTarget(null); }} title="Compare designs" wide>
-        <CompareView
-          current={{ planId, config, thumbnail: currentThumb }}
-          target={compareTarget}
+      <Dialog open={dialog === "compare"} onClose={() => { setDialog(null); setCompareTarget(null); }} title={S.compareTitle} wide>
+        <CompareView m={m} locale={locale} current={{ planId, config, thumbnail: currentThumb }} target={compareTarget}
           candidates={[...snapshots, ...saved.map((d) => ({ id: d.id, name: d.name, presetId: d.presetId, config: coerceConfig(d.config), thumbnail: d.thumbnail ?? "" }))]}
           onPick={setCompareTarget}
           onRestore={(s) => { load(s.presetId, s.config, { keepHistory: true }); setDialog(null); setCompareTarget(null); }}
-          signedIn={signedIn}
-        />
+          signedIn={signedIn} />
       </Dialog>
 
-      {/* Export */}
-      <Dialog open={dialog === "export"} onClose={() => setDialog(null)} title="Export image">
+      <Dialog open={dialog === "export"} onClose={() => setDialog(null)} title={S.exportTitle}>
         <div className="space-y-3">
-          <p className="text-sm text-muted">Exports the current camera view as a PNG, including lighting and effects.</p>
-          <Button className="w-full" variant="secondary" loading={busy} onClick={() => exportImage(1)}>Screen resolution</Button>
-          <Button className="w-full" variant="secondary" loading={busy} disabled={!pro} onClick={() => exportImage(2.5)}>High resolution (up to 4K){pro ? "" : " · Studio Pro"}</Button>
-          {!pro && <p className="text-xs text-muted">High-resolution export is part of <Link href="/pricing#studio-pro" className="text-accent-ink hover:underline">Studio Pro</Link>.</p>}
+          <p className="text-sm text-muted">{S.exportBody}</p>
+          <Button className="w-full" variant="secondary" loading={busy} onClick={() => exportImage(1)}>{S.screenRes}</Button>
+          <Button className="w-full" variant="secondary" loading={busy} disabled={!pro} onClick={() => exportImage(2.5)}>{S.highRes}{pro ? "" : ` · ${S.studioPro}`}</Button>
+          {!pro && <p className="text-xs text-muted">{S.proOnly} <Link href="/pricing#studio-pro" className="text-accent-ink hover:underline">{S.studioPro}</Link>.</p>}
         </div>
       </Dialog>
 
-      {/* Summary */}
-      <Dialog open={dialog === "summary"} onClose={() => setDialog(null)} title="Project summary" wide
+      <Dialog open={dialog === "summary"} onClose={() => setDialog(null)} title={S.summaryTitle} wide
         footer={
           <>
-            <Button variant="secondary" onClick={() => { void navigator.clipboard?.writeText(summaryText); setNotice({ kind: "ok", text: "Summary copied." }); }}>Copy text</Button>
-            <Button variant="secondary" onClick={() => download(URL.createObjectURL(new Blob([summaryText], { type: "text/plain" })), `${plan.id}-summary.txt`)}>Download .txt</Button>
-            <Button onClick={() => window.print()}>Print / PDF</Button>
+            <Button variant="secondary" onClick={() => { void navigator.clipboard?.writeText(summaryText); setNotice({ kind: "ok", text: S.copied }); }}>{S.copy}</Button>
+            <Button variant="secondary" onClick={() => download(URL.createObjectURL(new Blob([summaryText], { type: "text/plain;charset=utf-8" })), `${plan.id}-summary.txt`)}>{S.download}</Button>
+            <Button onClick={() => window.print()}>{S.print}</Button>
           </>
         }>
-        <SummaryBody planName={plan.name} description={plan.description} stats={model.stats} lines={summarizeModel(model)} config={config} />
+        <SummaryBody m={m} locale={locale} name={pName} description={planDescription(m, plan)} stats={model.stats} lines={summarizeModelL(m, locale, model)} config={config} />
       </Dialog>
     </div>
   );
 }
 
-function SummaryBody({ planName, description, stats, lines, config }: { planName: string; description: string; stats: BuildingStats; lines: string[]; config: BuildingConfig }) {
+function SummaryBody({ m, locale, name, description, stats, lines, config }: { m: Messages; locale: Locale; name: string; description: string; stats: BuildingStats; lines: string[]; config: BuildingConfig }) {
   return (
     <div className="print-area space-y-6">
       <div>
-        <p className="eyebrow">Design summary</p>
-        <h3 className="mt-1 font-display text-3xl">{planName}</h3>
+        <p className="eyebrow">{m.studio.summaryEyebrow}</p>
+        <h3 className="mt-1 font-display text-3xl">{name}</h3>
         <p className="mt-1 text-sm text-muted">{description}</p>
       </div>
-      <ul className="grid gap-2 text-sm sm:grid-cols-2">
-        {lines.map((l) => <li key={l} className="rounded border hairline px-3 py-2">{l}</li>)}
-      </ul>
+      <ul className="grid gap-2 text-sm sm:grid-cols-2">{lines.map((l) => <li key={l} className="rounded border hairline px-3 py-2">{l}</li>)}</ul>
       <div className="grid gap-6 sm:grid-cols-3">
-        {describeConfig(config).map((s) => (
+        {describeConfigL(m, locale, config).map((s) => (
           <div key={s.section}>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted">{s.section}</p>
             <dl className="mt-2 space-y-1.5 text-sm">
-              {s.rows.map((r) => (
-                <div key={r.label} className="flex justify-between gap-3"><dt className="text-muted">{r.label}</dt><dd className="text-right">{r.value}</dd></div>
-              ))}
+              {s.rows.map((r) => <div key={r.label} className="flex justify-between gap-3"><dt className="text-muted">{r.label}</dt><dd className="text-end">{r.value}</dd></div>)}
             </dl>
           </div>
         ))}
       </div>
-      <p className="rounded border hairline bg-surface p-3 text-xs text-muted">
-        Preliminary design study generated from the interactive model ({stats.grossFloorArea} m² gross). It is not a construction document. Structural safety, building-code and permit compliance require drawings prepared and verified by licensed professionals.
-      </p>
+      <p className="rounded border hairline bg-surface p-3 text-xs text-muted">{fmt(m.studio.summaryDisclaimer, { area: num(locale, stats.grossFloorArea) })}</p>
     </div>
   );
 }
 
-function CompareView({ current, target, candidates, onPick, onRestore, signedIn }: {
+function CompareView({ m, locale, current, target, candidates, onPick, onRestore, signedIn }: {
+  m: Messages; locale: Locale;
   current: { planId: string; config: BuildingConfig; thumbnail: string | null };
   target: Snapshot | null;
   candidates: Snapshot[];
@@ -410,18 +385,15 @@ function CompareView({ current, target, candidates, onPick, onRestore, signedIn 
   onRestore: (s: Snapshot) => void;
   signedIn: boolean;
 }) {
+  const S = m.studio;
   if (!target) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-muted">Choose a snapshot or saved design to compare with what is on screen.</p>
-        {candidates.length === 0 && (
-          <p className="rounded border hairline p-4 text-sm text-muted">
-            Nothing to compare yet. Use <span className="text-ink">Snapshot</span> to capture versions as you work{signedIn ? ", or save designs to your account." : "."}
-          </p>
-        )}
+        <p className="text-sm text-muted">{S.comparePick}</p>
+        {candidates.length === 0 && <p className="rounded border hairline p-4 text-sm text-muted">{signedIn ? S.compareEmptyAccount : S.compareEmpty}</p>}
         <div className="grid gap-4 sm:grid-cols-3">
           {candidates.map((c) => (
-            <button key={c.id} type="button" onClick={() => onPick(c)} className="group overflow-hidden rounded-lg border hairline text-left hover:border-accent">
+            <button key={c.id} type="button" onClick={() => onPick(c)} className="group overflow-hidden rounded-lg border hairline text-start hover:border-accent">
               {c.thumbnail ? <img src={c.thumbnail} alt="" className="aspect-[16/10] w-full object-cover" /> : <div className="aspect-[16/10] bg-surface" />}
               <p className="px-3 py-2 text-sm text-ink">{c.name}</p>
             </button>
@@ -432,11 +404,12 @@ function CompareView({ current, target, candidates, onPick, onRestore, signedIn 
   }
   const a = generateBuilding(getPlan(target.presetId), target.config).stats;
   const b = generateBuilding(getPlan(current.planId), current.config).stats;
-  const diffs = target.presetId === current.planId ? diffConfigs(target.config, current.config) : [];
+  const diffs = target.presetId === current.planId ? diffConfigsL(m, locale, target.config, current.config) : [];
+  const n = (v: number, d = 0) => num(locale, v, d);
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        {[{ label: target.name, src: target.thumbnail }, { label: "Current design", src: current.thumbnail }].map((x) => (
+        {[{ label: target.name, src: target.thumbnail }, { label: S.current, src: current.thumbnail }].map((x) => (
           <figure key={x.label}>
             {x.src ? <img src={x.src} alt={x.label} className="aspect-[16/10] w-full rounded-lg border hairline object-cover" /> : <div className="aspect-[16/10] rounded-lg bg-surface" />}
             <figcaption className="mt-2 text-sm font-medium">{x.label}</figcaption>
@@ -444,19 +417,17 @@ function CompareView({ current, target, candidates, onPick, onRestore, signedIn 
         ))}
       </div>
       <table className="table-base">
-        <thead><tr><th>Measure</th><th>{target.name}</th><th>Current</th></tr></thead>
+        <thead><tr><th>{S.measureCol}</th><th>{target.name}</th><th>{S.current}</th></tr></thead>
         <tbody>
-          {target.presetId !== current.planId && <tr><td>Building</td><td>{getPlan(target.presetId).name}</td><td>{getPlan(current.planId).name}</td></tr>}
-          <tr><td>Glazing area</td><td>{a.glazingArea} m²</td><td>{b.glazingArea} m²</td></tr>
-          <tr><td>Glazing ratio</td><td>{Math.round(a.glazingRatio * 100)}%</td><td>{Math.round(b.glazingRatio * 100)}%</td></tr>
-          <tr><td>Height</td><td>{a.height} m</td><td>{b.height} m</td></tr>
+          {target.presetId !== current.planId && <tr><td>{S.buildingRow}</td><td>{planName(m, getPlan(target.presetId))}</td><td>{planName(m, getPlan(current.planId))}</td></tr>}
+          <tr><td>{S.glazingArea}</td><td>{n(a.glazingArea)} m²</td><td>{n(b.glazingArea)} m²</td></tr>
+          <tr><td>{S.glazingRatio}</td><td>{n(Math.round(a.glazingRatio * 100))}%</td><td>{n(Math.round(b.glazingRatio * 100))}%</td></tr>
+          <tr><td>{S.height}</td><td>{n(a.height, 1)} m</td><td>{n(b.height, 1)} m</td></tr>
           {diffs.map((d) => <tr key={d.path}><td>{d.label}</td><td>{d.a}</td><td>{d.b}</td></tr>)}
-          {diffs.length === 0 && target.presetId === current.planId && <tr><td colSpan={3} className="text-muted">The configurations are identical.</td></tr>}
+          {diffs.length === 0 && target.presetId === current.planId && <tr><td colSpan={3} className="text-muted">{S.identical}</td></tr>}
         </tbody>
       </table>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={() => onRestore(target)}>Load {target.name} into the studio</Button>
-      </div>
+      <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => onRestore(target)}>{fmt(S.load, { name: target.name })}</Button></div>
     </div>
   );
 }

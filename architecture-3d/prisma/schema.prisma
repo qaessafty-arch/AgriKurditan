@@ -33,6 +33,8 @@ model User {
   lockedUntil        DateTime?
   disabled           Boolean   @default(false)
   marketingOptIn     Boolean   @default(false)
+  /// Preferred language for emails and notifications: en | ar | ckb
+  locale             String    @default("en")
   bio                String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -94,6 +96,8 @@ model Service {
   benefits     String[]
   process      Json     // [{ title, detail }]
   heroPreset   String   // building preset id used for the live 3D cover
+  /// { ar: { name, tagline, description, benefits[], process[] }, ckb: {...} }
+  translations Json     @default("{}")
   sortOrder    Int      @default(0)
   published    Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -143,6 +147,8 @@ model Offering {
   sortOrder     Int             @default(0)
   serviceId     String?
   service       Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  /// { ar: { name, summary, features[] }, ckb: {...} }
+  translations  Json            @default("{}")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -189,6 +195,8 @@ model Project {
   serviceId     String?
   service       Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   coverUploadId String?
+  /// { ar: { title, summary, description, challenge, solution, outcome }, ckb: {...} }
+  translations  Json          @default("{}")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

@@ -5,8 +5,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { email, optionalText, phone, text } from "@/lib/validation";
 import { LIMITS } from "@/lib/security/rate-limit";
 import { humanReference } from "@/lib/security/tokens";
-import { notifyAdmins, notifyUser } from "@/lib/notify";
-import { sendEmail } from "@/lib/email";
+import { notifyAdmins, notifyUser, sendLocalizedEmail } from "@/lib/notify";
+import { requestLocale } from "@/i18n/errors";
 import { ownedBriefId, ownedDesignId } from "@/lib/leads";
 import { badRequest } from "@/lib/errors";
 
@@ -40,8 +40,7 @@ export const POST = route({ rate: ["form", LIMITS.publicForm] }, async (req) => 
     },
   });
   await notifyAdmins(`Consultation request ${c.reference}`, `${c.name} (${c.email}) — ${c.topic}${service ? ` · ${service.name}` : ""}`, `/admin/consultations`);
-  if (user) await notifyUser(user.id, "Consultation requested", `Reference ${c.reference}. An architect will contact you to confirm a time.`, "/account/consultations");
-  const mail = await sendEmail(c.email, `We received your consultation request (${c.reference})`,
-    `Hello ${c.name},\n\nThank you for your request about "${c.topic}". An architect will contact you to confirm a time.\n\nReference: ${c.reference}`);
+  if (user) await notifyUser(user.id, "consultRequested", { ref: c.reference }, "/account/consultations");
+  const mail = await sendLocalizedEmail(requestLocale(req.headers), c.email, "consultConfirm", { name: c.name, topic: c.topic, ref: c.reference });
   return { reference: c.reference, emailed: mail.sent };
 });

@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { motion, useReducedMotion } from "framer-motion";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Link from "next/link";
+import { Link } from "@/i18n/client";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { SceneCanvas } from "@/components/three/SceneCanvas";
@@ -15,6 +15,8 @@ import type { BuildingConfig } from "@/three/config";
 import type { BuildingModel } from "@/three/generate";
 import { evaluate, MATERIAL_VARIANTS, SCENES } from "./timeline";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/i18n/client";
+import { fmt } from "@/i18n/config";
 import { track } from "@/components/layout/ConsentBanner";
 
 const PLAN_ID = "villa-horizon";
@@ -63,6 +65,8 @@ function CinematicRig({
 }
 
 export function CinematicExperience() {
+  const { m } = useI18n();
+  const H = m.home;
   const plan = getPlan(PLAN_ID);
   const reducedPref = useReducedMotion();
   const reduced = Boolean(reducedPref);
@@ -117,15 +121,15 @@ export function CinematicExperience() {
   };
 
   return (
-    <section ref={container} className="relative" aria-label="Cinematic project presentation">
+    <section ref={container} className="relative" aria-label={H.sceneLabel}>
       <div className="sticky top-0 h-[100dvh] w-full overflow-hidden">
         <SceneCanvas
           className="absolute inset-0"
-          label="Animated 3D presentation of the Horizon Villa: exterior, cutaway, floors, interior, materials and daylight"
+          label={H.canvasLabel}
           camera={{ position: [40, 8, 50], fov: 34 }}
           fallback={
             <div className="absolute inset-0 grid place-items-center bg-surface">
-              <ElevationDrawing model={model} className="h-[45vh] w-[90vw] max-w-4xl text-stone" title="Horizon Villa front elevation" />
+              <ElevationDrawing model={model} className="h-[45vh] w-[90vw] max-w-4xl text-stone" title={fmt(m.explorer.elevation, { name: m.plans["villa-horizon"]!.name })} />
             </div>
           }
         >
@@ -133,13 +137,13 @@ export function CinematicExperience() {
           <CinematicRig model={model} progress={progress} reduced={reduced} driven={driven} onDiscrete={(time, variant) => setDiscrete((d) => (d.time === time && d.variant === variant ? d : { time, variant }))} />
         </SceneCanvas>
         {/* Legibility gradient: text sits left, the building stays clear on the right. */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-canvas/85 via-canvas/25 to-transparent max-lg:bg-gradient-to-t max-lg:from-canvas/90 max-lg:via-canvas/20" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r rtl:bg-gradient-to-l from-canvas/85 via-canvas/25 to-transparent max-lg:bg-gradient-to-t max-lg:from-canvas/90 max-lg:via-canvas/20" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-canvas/80 to-transparent" />
 
-        <nav aria-label="Presentation chapters" className="absolute right-4 top-1/2 hidden -translate-y-1/2 flex-col gap-3 lg:flex">
+        <nav aria-label={H.chaptersLabel} className="absolute end-4 top-1/2 hidden -translate-y-1/2 flex-col gap-3 lg:flex">
           {SCENES.map((s, i) => (
-            <button key={s.id} type="button" onClick={() => goTo(i)} className="group flex items-center justify-end gap-3" aria-label={`Go to ${s.eyebrow}`} aria-current={scene === i ? "step" : undefined}>
-              <span className={cn("text-xs transition-opacity", scene === i ? "text-ink opacity-100" : "text-muted opacity-0 group-hover:opacity-100")}>{s.eyebrow.split(" — ")[1]}</span>
+            <button key={s.id} type="button" onClick={() => goTo(i)} className="group flex items-center justify-end gap-3" aria-label={fmt(H.goTo, { chapter: H.chapters[i]! })} aria-current={scene === i ? "step" : undefined}>
+              <span className={cn("text-xs transition-opacity", scene === i ? "text-ink opacity-100" : "text-muted opacity-0 group-hover:opacity-100")}>{H.chapters[i]}</span>
               <span className={cn("block h-px transition-all", scene === i ? "w-8 bg-accent" : "w-4 bg-ink/40")} />
             </button>
           ))}
@@ -147,7 +151,7 @@ export function CinematicExperience() {
 
         <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
           <span className={cn("flex flex-col items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted transition-opacity duration-500", scene === 0 ? "opacity-100" : "opacity-0")}>
-            Scroll to explore
+            {H.scroll}
             <span className="relative h-10 w-px overflow-hidden bg-ink/20">
               <span className="absolute inset-x-0 top-0 h-4 animate-[scrollcue_2s_ease-in-out_infinite] bg-accent motion-reduce:animate-none" />
             </span>
@@ -166,27 +170,27 @@ export function CinematicExperience() {
                 transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                 className={cn("max-w-xl", i === 0 ? "lg:max-w-2xl" : "")}
               >
-                <p className="eyebrow">{s.eyebrow}</p>
+                <p className="eyebrow">{H.scenes[i]!.eyebrow}</p>
                 {i === 0 ? (
-                  <h1 className="mt-4 text-display-xl text-ink text-balance">{s.title}</h1>
+                  <h1 className="mt-4 text-display-xl text-ink text-balance">{H.scenes[i]!.title}</h1>
                 ) : (
-                  <h2 className="mt-3 text-display-lg text-ink text-balance">{s.title}</h2>
+                  <h2 className="mt-3 text-display-lg text-ink text-balance">{H.scenes[i]!.title}</h2>
                 )}
-                <p className="mt-5 max-w-md text-base leading-relaxed text-ink/80 sm:text-lg">{s.body}</p>
+                <p className="mt-5 max-w-md text-base leading-relaxed text-ink/80 sm:text-lg">{H.scenes[i]!.body}</p>
                 {i === 0 && (
                   <div className="mt-8 flex flex-wrap gap-3">
-                    <ButtonLink href={`/explore?plan=${PLAN_ID}`} size="lg" onClick={() => track("cta_click", "hero_explore")}>Explore the project</ButtonLink>
-                    <ButtonLink href="/consultation" variant="secondary" size="lg" onClick={() => track("cta_click", "hero_consult")}>Request consultation</ButtonLink>
+                    <ButtonLink href={`/explore?plan=${PLAN_ID}`} size="lg" onClick={() => track("cta_click", "hero_explore")}>{H.exploreProject}</ButtonLink>
+                    <ButtonLink href="/consultation" variant="secondary" size="lg" onClick={() => track("cta_click", "hero_consult")}>{m.common.requestConsultation}</ButtonLink>
                   </div>
                 )}
                 {i === 5 && (
-                  <Link href="/studio" className="mt-6 inline-flex text-sm font-medium text-accent-ink underline-offset-4 hover:underline">Open the design studio →</Link>
+                  <Link href="/studio" className="mt-6 inline-flex text-sm font-medium text-accent-ink underline-offset-4 hover:underline">{H.openStudio} {m.common.arrow}</Link>
                 )}
                 {i === SCENES.length - 1 && (
                   <div className="mt-8 flex flex-wrap gap-3">
-                    <ButtonLink href="/consultation" size="lg" onClick={() => track("cta_click", "final_consult")}>Book a consultation</ButtonLink>
-                    <ButtonLink href="/studio" variant="secondary" size="lg">Start in the studio</ButtonLink>
-                    <ButtonLink href="/assistant" variant="ghost" size="lg">Try the AI assistant</ButtonLink>
+                    <ButtonLink href="/consultation" size="lg" onClick={() => track("cta_click", "final_consult")}>{H.bookConsultation}</ButtonLink>
+                    <ButtonLink href="/studio" variant="secondary" size="lg">{H.startStudio}</ButtonLink>
+                    <ButtonLink href="/assistant" variant="ghost" size="lg">{H.tryAssistant}</ButtonLink>
                   </div>
                 )}
               </motion.div>

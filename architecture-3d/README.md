@@ -16,6 +16,7 @@ An immersive architectural visualization and commercial platform. Visitors scrol
 | **Commerce** | Admin-managed offerings for all eight revenue streams. Orders snapshot prices. Manual bank transfer and cash workflow for markets without a verified gateway (Iraq): customer submits reference and receipt, staff verify, and only then is the order paid and the plan activated. |
 | **Accounts** | Registration (client, architect or partner), sign-in with lockout, password reset, profile, saved designs, consultations, quotes, orders, notifications, subscriptions, architect project submissions. |
 | **Admin** (`/admin`) | Analytics (verified revenue, conversion, new customers, inquiries, abandoned quotes, popular services, most-viewed projects), consultations, quotes, messages, orders, payment verification, subscriptions, users and roles, projects and featuring, 3D assets, services, pricing, reviews, newsletter export, settings, audit log. |
+| **Languages** | English, Arabic (`/ar`) and Kurdish Sorani (`/ckb`), with full right-to-left layout. See [Languages](#languages). |
 | **Marketing** | Services, filterable portfolio with case studies and lazy-loaded 3D, pricing, consultation/quote/contact forms, WhatsApp button, newsletter double opt-in, moderated reviews, consent-gated first-party analytics, metadata, JSON-LD, sitemap, robots, generated Open Graph image. |
 
 ## Stack
@@ -46,6 +47,23 @@ Sign in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` and go to **Admin → Se
 5. **Storage.** For multi-instance or serverless hosting, set `STORAGE_DRIVER=s3` with an S3-compatible bucket (AWS S3, Cloudflare R2, MinIO).
 6. **Legal.** Have the privacy policy and terms reviewed for your jurisdiction.
 7. **Cover images.** With the server running: `node scripts/render-covers.mjs` renders portfolio covers and gallery views from the real 3D models into `public/renders/`.
+
+## Languages
+
+| Locale | URL prefix | Direction | Font |
+|---|---|---|---|
+| English | none | LTR | Manrope / Cormorant Garamond |
+| Arabic (`ar`) | `/ar` | RTL | Noto Kufi Arabic / Noto Naskh Arabic |
+| Kurdish, Sorani (`ckb`) | `/ckb` | RTL | Noto Kufi Arabic / Noto Naskh Arabic |
+
+- **Routing.** Middleware reads the prefix, sets `<html lang dir>` and remembers the choice in the `a3d-locale` cookie. A first visit with no cookie follows `Accept-Language` (`ku` maps to Sorani). Every page carries canonical and `hreflang` alternates. `/admin` is staff-only and stays English.
+- **Text.** `src/i18n/messages/en.ts` is the source catalogue and defines the type. A key missing from `ar.ts` or `ckb.ts` fails the typecheck. Server components use `getI18n()`; client components use `useI18n()` and the locale-aware `Link`.
+- **Database content.** Services, offerings and projects have a `translations` JSON column (`{ "ar": { "name": … }, "ckb": { … } }`), filled by the seed. The English field is the fallback. Prices are never translated or overwritten.
+- **Numbers, prices and dates** use Eastern Arabic digits in both RTL languages. Browsers ship no Sorani locale data, so Sorani formats numbers through `ar-IQ` and builds dates from Sorani month names. This keeps server and browser output identical.
+- **Server text.** API errors, notifications and transactional emails follow the request language, or the user's saved language (`User.locale`, set at registration and in the profile). AI briefs are written in the visitor's language: the rules engine has its own text per language, and Claude is instructed to answer in it.
+- **Layout** uses logical properties (`ms-`, `pe-`, `start-`) and `rtl:` variants. Codes, emails and references stay left-to-right.
+
+> **Before launch:** the Arabic and Sorani text was written for this build and has not been reviewed by native speakers. Have both reviewed, especially the legal pages (privacy, terms), payment instructions and the AI disclaimer. Kurmanji (Latin script) is not included.
 
 ## Scripts
 

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/client";
 import { db } from "@/lib/db";
 import { requirePageCapability } from "@/lib/auth/session";
 import { dateLabel, titleCase } from "@/lib/format";
@@ -27,8 +27,8 @@ export default async function AdminConsultations({ searchParams }: { searchParam
             <p className="mt-3 whitespace-pre-line text-sm text-ink/90">{c.message}</p>
             {(c.design || c.brief) && (
               <p className="mt-2 text-sm">
-                {c.design && <span className="mr-3">Design: {c.design.name}</span>}
-                {c.brief && <span>AI brief ({c.brief.provider}){c.brief.uploadIds.map((u, i) => <a key={u} href={uploadUrl(u)!} target="_blank" className="ml-2 text-accent-ink hover:underline">photo {i + 1}</a>)}</span>}
+                {c.design && <span className="me-3">Design: {c.design.name}</span>}
+                {c.brief && <span>AI brief ({c.brief.provider}){c.brief.uploadIds.map((u, i) => <a key={u} href={uploadUrl(u)!} target="_blank" className="ms-2 text-accent-ink hover:underline">photo {i + 1}</a>)}</span>}
               </p>
             )}
             <div className="mt-4 border-t hairline pt-4">

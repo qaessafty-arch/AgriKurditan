@@ -4,12 +4,12 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getEntitlements } from "@/lib/entitlements";
 import { getSetting } from "@/lib/settings";
 import { pageMeta } from "@/lib/seo";
+import { getI18n } from "@/i18n/server";
 
-export const metadata = pageMeta({
-  title: "Design studio",
-  description: "Customise facade materials, glazing, roof, interiors, landscape and daylight on real building designs, then save, compare and request a quote.",
-  path: "/studio",
-});
+export async function generateMetadata() {
+  const { m, locale } = await getI18n();
+  return pageMeta({ title: m.studio.metaTitle, description: m.studio.metaDescription, path: "/studio", locale });
+}
 
 export default async function StudioPage() {
   const user = await getCurrentUser();

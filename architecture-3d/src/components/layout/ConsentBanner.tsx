@@ -2,6 +2,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/i18n/client";
 
 const KEY = "a3d-consent";
 export type Consent = "granted" | "denied";
@@ -37,6 +38,7 @@ export function track(type: string, subject?: string) {
 }
 
 export function ConsentBanner() {
+  const { m } = useI18n();
   const [consent, setConsent] = useState<Consent | null | "unknown">("unknown");
   const pathname = usePathname();
   const last = useRef<string | null>(null);
@@ -56,15 +58,12 @@ export function ConsentBanner() {
   };
 
   return (
-    <div role="dialog" aria-live="polite" aria-label="Analytics consent" className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-xl rounded-lg border hairline bg-raised p-4 shadow-panel sm:inset-x-6 sm:bottom-6">
-      <p className="text-sm text-ink">May we record anonymous usage statistics?</p>
-      <p className="mt-1 text-xs leading-relaxed text-muted">
-        We count page views and which projects are viewed so we can improve the site. No advertising trackers, no third parties.
-        Essential cookies for signing in are always used.
-      </p>
+    <div role="dialog" aria-live="polite" aria-label={m.consent.label} className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-xl rounded-lg border hairline bg-raised p-4 shadow-panel sm:inset-x-6 sm:bottom-6">
+      <p className="text-sm text-ink">{m.consent.title}</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted">{m.consent.body}</p>
       <div className="mt-3 flex gap-2">
-        <Button size="sm" onClick={() => decide("granted")}>Allow statistics</Button>
-        <Button size="sm" variant="secondary" onClick={() => decide("denied")}>Decline</Button>
+        <Button size="sm" onClick={() => decide("granted")}>{m.consent.allow}</Button>
+        <Button size="sm" variant="secondary" onClick={() => decide("denied")}>{m.consent.decline}</Button>
       </div>
     </div>
   );

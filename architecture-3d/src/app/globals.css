@@ -7,6 +7,16 @@
  * Contrast for every text/background pair is verified by scripts/contrast.mjs (WCAG AA ≥ 4.5:1).
  */
 @layer base {
+  /* Font stacks: Latin by default; Arabic-script fonts (covering Sorani letters) in RTL locales. */
+  :root {
+    --font-ui: var(--font-sans);
+    --font-head: var(--font-display);
+  }
+  :root[dir="rtl"] {
+    --font-ui: var(--font-ar-sans), var(--font-sans);
+    --font-head: var(--font-ar-display), var(--font-ar-sans);
+  }
+
   :root,
   [data-theme="dark"] {
     color-scheme: dark;
@@ -65,6 +75,33 @@
     background: rgb(var(--accent) / 0.35);
   }
 
+  /* Arabic script joins letters: letter-spacing and capitalisation break it. */
+  [dir="rtl"] body,
+  [dir="rtl"] body * {
+    letter-spacing: 0 !important;
+  }
+  [dir="rtl"] .uppercase {
+    text-transform: none;
+  }
+  [dir="rtl"] .text-display-xl,
+  [dir="rtl"] .text-display-lg,
+  [dir="rtl"] .text-display-md {
+    line-height: 1.3;
+  }
+  [dir="rtl"] h1,
+  [dir="rtl"] h2,
+  [dir="rtl"] h3 {
+    font-weight: 600;
+  }
+  /* Codes, references and IBANs stay start-to-right inside RTL text. */
+  [dir="rtl"] .font-mono,
+  [dir="rtl"] input[type="email"],
+  [dir="rtl"] input[type="tel"],
+  [dir="rtl"] input[type="number"] {
+    direction: ltr;
+    unicode-bidi: plaintext;
+  }
+
   :focus-visible {
     outline: 2px solid rgb(var(--accent));
     outline-offset: 3px;
@@ -84,6 +121,10 @@
 @layer components {
   .eyebrow {
     @apply text-eyebrow uppercase text-accent-ink font-semibold;
+  }
+  [dir="rtl"] .eyebrow {
+    font-size: 0.85rem;
+    line-height: 1.4;
   }
 
   .glass {
@@ -120,7 +161,7 @@
   }
 
   .table-base {
-    @apply w-full text-left text-sm;
+    @apply w-full text-start text-sm;
   }
   .table-base th {
     @apply border-b px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted;

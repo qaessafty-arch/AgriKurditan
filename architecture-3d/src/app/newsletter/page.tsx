@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/marketing/PageHeader";
+import { getI18n } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Newsletter", robots: { index: false } };
-const MESSAGES: Record<string, [string, string]> = {
-  confirmed: ["Subscription confirmed", "Thank you. You will receive our monthly project notes."],
-  unsubscribed: ["You have been unsubscribed", "You will not receive any more newsletters from us."],
-  invalid: ["This link is not valid", "It may have expired or already been used. Subscribe again from the footer of any page."],
-};
+export const metadata: Metadata = { robots: { index: false } };
 
 export default async function NewsletterPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const [title, body] = MESSAGES[(await searchParams).status ?? ""] ?? MESSAGES.invalid!;
-  return <PageHeader eyebrow="Newsletter" title={title}>{body}</PageHeader>;
+  const { m } = await getI18n();
+  const N = m.pages.newsletter;
+  const status = (await searchParams).status;
+  const msg = status === "confirmed" ? N.confirmed : status === "unsubscribed" ? N.unsubscribed : N.invalid;
+  return <PageHeader eyebrow={N.eyebrow} title={msg.title}>{msg.body}</PageHeader>;
 }

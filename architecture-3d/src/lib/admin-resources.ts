@@ -66,7 +66,7 @@ export const RESOURCES: Record<string, Resource> = {
         if (!before) throw notFound();
         const p = await db.project.update({ where: { id }, data });
         if (before.ownerId && data.status && data.status !== before.status) {
-          await notifyUser(before.ownerId, `Project ${data.status === "PUBLISHED" ? "published" : "updated"}: ${before.title}`, `Status is now ${String(data.status).toLowerCase().replace("_", " ")}.`, data.status === "PUBLISHED" ? `/projects/${before.slug}` : "/account/projects");
+          await notifyUser(before.ownerId, data.status === "PUBLISHED" ? "projectPublished" : "projectUpdated", { title: before.title }, data.status === "PUBLISHED" ? `/projects/${before.slug}` : "/account/projects");
         }
         return p;
       },
@@ -114,7 +114,7 @@ export const RESOURCES: Record<string, Resource> = {
         if (data.status === "CANCELLED" && o.status === "PAID") throw badRequest("Paid orders must be refunded, not cancelled.");
         const updated = await db.order.update({ where: { id }, data: { status: data.status, notes: data.notes ?? o.notes } });
         if (data.status === "REFUNDED") await db.subscription.updateMany({ where: { orderId: id }, data: { status: "CANCELLED" } });
-        await notifyUser(o.userId, `Order ${o.reference} ${data.status.toLowerCase()}`, data.notes ?? "", `/account/orders/${o.id}`);
+        await notifyUser(o.userId, data.status === "REFUNDED" ? "orderRefunded" : "orderCancelled", { ref: o.reference, note: data.notes ?? "" }, `/account/orders/${o.id}`);
         return updated;
       },
     },
@@ -126,7 +126,7 @@ export const RESOURCES: Record<string, Resource> = {
       apply: async (id, data: { status?: string; scheduledAt?: Date | null; adminNotes?: string }) => {
         const c = await db.consultation.update({ where: { id }, data: data as Prisma.ConsultationUpdateInput });
         if (c.userId && (data.status === "CONFIRMED" || data.scheduledAt)) {
-          await notifyUser(c.userId, `Consultation ${c.reference} ${c.status.toLowerCase()}`, c.scheduledAt ? `Scheduled for ${c.scheduledAt.toUTCString()}.` : "We will contact you to arrange the time.", "/account/consultations", c.email);
+          await notifyUser(c.userId, "consultUpdated", { ref: c.reference, when: c.scheduledAt ? c.scheduledAt.toISOString().replace("T", " ").slice(0, 16) + " UTC" : "" }, "/account/consultations", c.email);
         }
         return c;
       },
@@ -142,7 +142,7 @@ export const RESOURCES: Record<string, Resource> = {
           if (!existing?.quotedAmount) throw badRequest("Enter the quoted amount before marking as quoted.", { quotedAmount: "Required" });
         }
         const q = await db.quoteRequest.update({ where: { id }, data: data as Prisma.QuoteRequestUpdateInput });
-        if (data.status === "QUOTED" && q.userId) await notifyUser(q.userId, `Your quote ${q.reference} is ready`, `Quoted ${money(q.quotedAmount, q.currency)}.`, "/account/quotes", q.email ?? undefined);
+        if (data.status === "QUOTED" && q.userId) await notifyUser(q.userId, "quoteReady", { ref: q.reference, amount: money(q.quotedAmount, q.currency) }, "/account/quotes", q.email ?? undefined);
         return q;
       },
     },

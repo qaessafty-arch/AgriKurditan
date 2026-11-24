@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/client";
 import { db } from "@/lib/db";
 import { requirePageCapability } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
@@ -23,7 +23,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <Link href="?" className={!role ? "text-ink underline" : "text-muted hover:text-ink"}>All</Link>
         {ROLES.map((r) => <Link key={r} href={`?role=${r}`} className={role === r ? "text-ink underline" : "text-muted hover:text-ink"}>{ROLE_LABELS[r]}s</Link>)}
-        <form className="ml-auto"><input name="q" defaultValue={q} placeholder="Search name or email" className="field h-9 w-56" aria-label="Search users" />{role && <input type="hidden" name="role" value={role} />}</form>
+        <form className="ms-auto"><input name="q" defaultValue={q} placeholder="Search name or email" className="field h-9 w-56" aria-label="Search users" />{role && <input type="hidden" name="role" value={role} />}</form>
       </div>
       <div className="mt-6 overflow-x-auto"><table className="table-base"><thead><tr><th>User</th><th>Joined</th><th>Activity</th><th>Role and access</th></tr></thead>
         <tbody>{users.map((u) => (

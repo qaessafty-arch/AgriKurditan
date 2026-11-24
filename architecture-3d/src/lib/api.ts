@@ -4,6 +4,9 @@ import { z, ZodError, type ZodType } from "zod";
 import { HttpError, badRequest, forbidden, tooMany } from "@/lib/errors";
 import { checkRate, type Limit } from "@/lib/security/rate-limit";
 import { clientIp } from "@/lib/auth/session";
+import { requestLocale, translateMessage } from "@/i18n/errors";
+import { getMessages } from "@/i18n/messages";
+import type { Locale } from "@/i18n/config";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -48,28 +51,35 @@ export function route<P extends Record<string, string> = Record<string, string>>
         const [name, limit] = opts.rate;
         const r = checkRate(`${name}:${ip}`, limit);
         if (!r.ok) {
-          return NextResponse.json({ error: tooMany().message }, { status: 429, headers: { "Retry-After": String(r.retryAfter) } });
+          return NextResponse.json({ error: translateMessage(requestLocale(req.headers), tooMany().message) }, { status: 429, headers: { "Retry-After": String(r.retryAfter) } });
         }
       }
       const params = ((await segment?.params) ?? {}) as P;
       const result = await fn(req, { ip, params });
       if (result instanceof Response) return result;
+      // User-facing success messages are translated the same way as errors.
+      const locale = requestLocale(req.headers);
+      if (locale !== "en" && result && typeof result === "object" && typeof (result as { message?: unknown }).message === "string") {
+        (result as { message: string }).message = translateMessage(locale, (result as { message: string }).message);
+      }
       return NextResponse.json(result ?? { ok: true }, { headers: { "Cache-Control": "no-store" } });
     } catch (err) {
-      return errorResponse(err);
+      return errorResponse(err, requestLocale(req.headers));
     }
   };
 }
 
-export function errorResponse(err: unknown) {
+export function errorResponse(err: unknown, locale: Locale = "en") {
+  const t = (msg: string, fallback?: string) => translateMessage(locale, msg, fallback);
+  const fieldsT = (f?: Record<string, string>) => f && Object.fromEntries(Object.entries(f).map(([k, v]) => [k, t(v, getMessages(locale).generic.fieldInvalid)]));
   if (err instanceof HttpError) {
-    return NextResponse.json({ error: err.message, fields: err.fields }, { status: err.status });
+    return NextResponse.json({ error: t(err.message), fields: fieldsT(err.fields) }, { status: err.status });
   }
   if (err instanceof ZodError) {
-    return NextResponse.json({ error: "Please check the highlighted fields.", fields: zodFields(err) }, { status: 400 });
+    return NextResponse.json({ error: t("Please check the highlighted fields."), fields: fieldsT(zodFields(err)) }, { status: 400 });
   }
   console.error("[api] unhandled error", err);
-  return NextResponse.json({ error: "Something went wrong on our side. Please try again." }, { status: 500 });
+  return NextResponse.json({ error: t("Something went wrong on our side. Please try again.") }, { status: 500 });
 }
 
 export function zodFields(err: ZodError): Record<string, string> {

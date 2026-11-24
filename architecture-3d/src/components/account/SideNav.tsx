@@ -1,10 +1,11 @@
 "use client";
-import Link from "next/link";
+import { Link } from "@/i18n/client";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { splitLocale } from "@/i18n/config";
 
 export function SideNav({ items, label }: { items: { href: string; label: string }[]; label: string }) {
-  const pathname = usePathname();
+  const pathname = splitLocale(usePathname()).path;
   return (
     <nav aria-label={label} className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:flex-col lg:px-0">
       {items.map((i) => {

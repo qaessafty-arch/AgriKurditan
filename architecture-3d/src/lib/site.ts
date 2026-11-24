@@ -9,11 +9,7 @@ export const SITE = {
   locale: "en",
 };
 
+/** Main navigation; labels come from the message catalogue (nav.*). */
 export const NAV = [
-  { href: "/projects", label: "Projects" },
-  { href: "/services", label: "Services" },
-  { href: "/explore", label: "Explore 3D" },
-  { href: "/studio", label: "Design studio" },
-  { href: "/assistant", label: "AI assistant" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/projects" }, { href: "/services" }, { href: "/explore" }, { href: "/studio" }, { href: "/assistant" }, { href: "/pricing" },
 ] as const;

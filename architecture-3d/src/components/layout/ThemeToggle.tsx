@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/i18n/client";
 
 type Theme = "dark" | "light";
 
 export const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('a3d-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='dark'}})();`;
 
 export function ThemeToggle() {
+  const { m } = useI18n();
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
@@ -24,8 +26,8 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       className="grid h-10 w-10 place-items-center rounded text-muted transition-colors hover:bg-ink/5 hover:text-ink"
-      aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
-      title={theme === "light" ? "Dark theme" : "Light theme"}
+      aria-label={theme === "light" ? m.common.toDark : m.common.toLight}
+      title={theme === "light" ? m.common.toDark : m.common.toLight}
     >
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
         {theme === "light" ? (

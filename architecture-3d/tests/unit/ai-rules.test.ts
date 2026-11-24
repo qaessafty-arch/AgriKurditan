@@ -35,3 +35,15 @@ describe("rules engine", () => {
     })).not.toThrow();
   });
 });
+
+describe("rules engine in Arabic and Kurdish", () => {
+  it("writes the brief in the requested language with local digits and stays schema-valid", () => {
+    for (const l of ["ar", "ckb"] as const) {
+      const b = rulesBrief(base, 1, l);
+      expect(briefOutputSchema.safeParse(b).success).toBe(true);
+      expect(b.summary).toMatch(/[؀-ۿ]/);
+      expect(b.summary).toMatch(/[٠-٩]/);
+      expect(b.program[0]!.space).toMatch(/[؀-ۿ]/);
+    }
+  });
+});

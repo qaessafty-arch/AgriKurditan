@@ -1,11 +1,13 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/i18n/client";
 
 const Viewer = dynamic(() => import("./ProjectViewer"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-surface" /> });
 
 /** Loads three.js and the model only when the viewer scrolls into view or the visitor asks for it. */
 export function LazyProjectViewer(props: { presetId: string; config: unknown; title: string; poster: string | null }) {
+  const { m } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
   useEffect(() => {
@@ -22,7 +24,7 @@ export function LazyProjectViewer(props: { presetId: string; config: unknown; ti
       ) : null}
       {!active && (
         <button type="button" onClick={() => setActive(true)} className="absolute inset-0 grid place-items-center bg-canvas/30 text-sm font-medium text-ink">
-          <span className="glass rounded-lg border hairline px-4 py-2">Load interactive 3D model</span>
+          <span className="glass rounded-lg border hairline px-4 py-2">{m.projects.loadModel}</span>
         </button>
       )}
     </div>
