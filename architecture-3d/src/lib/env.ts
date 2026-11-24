@@ -28,7 +28,8 @@ export const env = {
   get smtpConfigured() {
     return Boolean(process.env.SMTP_HOST && process.env.EMAIL_FROM);
   },
-  get storageDriver(): "local" | "s3" {
-    return process.env.STORAGE_DRIVER === "s3" ? "s3" : "local";
+  get storageDriver(): "local" | "s3" | "blob" {
+    const d = process.env.STORAGE_DRIVER;
+    return d === "s3" || d === "blob" ? d : "local";
   },
 };

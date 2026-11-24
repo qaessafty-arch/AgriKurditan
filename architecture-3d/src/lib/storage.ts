@@ -49,6 +49,10 @@ async function s3() {
   return { client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, bucket: process.env.S3_BUCKET ?? "" };
 }
 
+// Vercel Blob, private store: files are never public; they are read server-side and served
+// through /api/uploads/:id, which applies the same access checks as the other drivers.
+const blob = () => import("@vercel/blob");
+
 export async function storeFile(buf: Buffer, purpose: UploadPurpose, userId: string | null, opts: { isPublic?: boolean } = {}): Promise<Upload> {
   if (buf.length === 0) throw badRequest("The file is empty.");
   if (buf.length > MAX_UPLOAD_BYTES[purpose]) throw badRequest(`File is too large (max ${Math.round(MAX_UPLOAD_BYTES[purpose] / 1024 / 1024)} MB).`);
@@ -57,7 +61,9 @@ export async function storeFile(buf: Buffer, purpose: UploadPurpose, userId: str
   const now = new Date();
   const key = `${purpose}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${randomBytes(16).toString("hex")}.${ALLOWED[mime]!.ext}`;
 
-  if (env.storageDriver === "s3") {
+  if (env.storageDriver === "blob") {
+    await (await blob()).put(key, buf, { access: "private", contentType: mime, addRandomSuffix: false });
+  } else if (env.storageDriver === "s3") {
     const { client, PutObjectCommand, bucket } = await s3();
     await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buf, ContentType: mime }));
   } else {
@@ -69,6 +75,11 @@ export async function storeFile(buf: Buffer, purpose: UploadPurpose, userId: str
 }
 
 export async function readStoredFile(upload: Upload): Promise<Buffer> {
+  if (env.storageDriver === "blob") {
+    const res = await (await blob()).get(upload.storageKey, { access: "private" });
+    if (!res || res.statusCode !== 200) throw new Error(`Blob not found: ${upload.storageKey}`);
+    return Buffer.from(await new Response(res.stream).arrayBuffer());
+  }
   if (env.storageDriver === "s3") {
     const { client, GetObjectCommand, bucket } = await s3();
     const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: upload.storageKey }));
@@ -81,7 +92,9 @@ export async function readStoredFile(upload: Upload): Promise<Buffer> {
 
 export async function deleteStoredFile(upload: Upload) {
   try {
-    if (env.storageDriver === "s3") {
+    if (env.storageDriver === "blob") {
+      await (await blob()).del(upload.storageKey);
+    } else if (env.storageDriver === "s3") {
       const { client, DeleteObjectCommand, bucket } = await s3();
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: upload.storageKey }));
     } else {

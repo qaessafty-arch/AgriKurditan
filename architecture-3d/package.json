@@ -26,6 +26,7 @@
     "@react-three/drei": "10.7.6",
     "@react-three/fiber": "9.3.0",
     "@react-three/postprocessing": "3.0.4",
+    "@vercel/blob": "2.9.0",
     "bcryptjs": "3.0.2",
     "framer-motion": "12.23.22",
     "gsap": "3.13.0",
@@ -59,6 +60,9 @@
   "overrides": {
     "postcss": "8.5.33",
     "motion-dom": "12.23.21",
-    "motion-utils": "12.23.6"
+    "motion-utils": "12.23.6",
+    "@vercel/cli-config": {
+      "zod": "$zod"
+    }
   }
 }
